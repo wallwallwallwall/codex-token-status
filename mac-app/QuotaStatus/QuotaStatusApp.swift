@@ -28,8 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       window.center()
       window.titlebarAppearsTransparent = true
       window.isMovableByWindowBackground = true
-      window.backgroundColor = .clear
-      window.isOpaque = false
+      window.backgroundColor = NSColor(red: 0.02, green: 0.08, blue: 0.10, alpha: 1)
+      window.isOpaque = true
     }
   }
 }
@@ -41,14 +41,13 @@ struct QuotaPanelView: View {
     let palette = Palette.forPercent(model.stale ? 0 : model.primaryPercent)
 
     GeometryReader { proxy in
-      let side = min(proxy.size.width, proxy.size.height)
-      let scale = max(0.78, min(1.65, side / 360))
-      let outerInset = max(2, min(7, side * 0.014))
-      let panelCorner = max(24, min(42, side * 0.078))
-      let contentPadding = max(18, min(40, side * 0.068))
-      let contentTopPadding = max(22, min(42, side * 0.074))
-      let contentBottomPadding = max(18, min(36, side * 0.064))
-      let gaugeSize = max(132, min(side * 0.47, side - contentTopPadding - contentBottomPadding - 132 * scale))
+      let base = min(proxy.size.width, proxy.size.height)
+      let scale = max(0.78, min(1.65, base / 360))
+      let panelCorner = max(24, min(42, base * 0.078))
+      let contentPadding = max(18, min(40, base * 0.068))
+      let contentTopPadding = max(22, min(42, base * 0.074))
+      let contentBottomPadding = max(18, min(36, base * 0.064))
+      let gaugeSize = max(132, min(base * 0.47, base - contentTopPadding - contentBottomPadding - 132 * scale))
 
       ZStack {
         LinearGradient(
@@ -78,7 +77,6 @@ struct QuotaPanelView: View {
               .stroke(Color.white.opacity(0.16), lineWidth: 1)
           )
           .shadow(color: Color.black.opacity(0.30), radius: 22 * scale, x: 0, y: 13 * scale)
-          .padding(outerInset)
 
         VStack(spacing: 12 * scale) {
           header(palette: palette, scale: scale)
@@ -117,8 +115,7 @@ struct QuotaPanelView: View {
         .padding(.top, contentTopPadding)
         .padding(.bottom, contentBottomPadding)
       }
-      .frame(width: side, height: side)
-      .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+      .frame(width: proxy.size.width, height: proxy.size.height)
     }
   }
 
