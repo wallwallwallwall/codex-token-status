@@ -564,7 +564,7 @@
       const short = windows.find((window) => !/^weekly$/i.test(window.label)) || weekly;
       const percent = percentFrom(data, short, weekly);
       const label = data.label || titleFromAccount(data.accountId);
-      const plan = data.planType || data.plan || data.membership || data.tier || "PLUS";
+      const plan = displayPlan(data);
 
       document.documentElement.style.setProperty("--level", `${percent}%`);
       applyPalette(percent, data.stale);
@@ -576,7 +576,7 @@
       ui.weeklyLabel.textContent = labelForWindow(weekly.label, "7天窗口");
       ui.weeklyPercent.textContent = percentTextForWindow(weekly);
       ui.weeklyReset.textContent = resetTextForWindow(weekly);
-      ui.planText.textContent = String(plan).toUpperCase();
+      ui.planText.textContent = plan;
       setStatus(data.stale ? "数据过期" : signalTextFor(percent));
     }
 
@@ -589,6 +589,17 @@
       if (Number.isFinite(Number(weekly.percent))) return clamp(weekly.percent);
       if (Number(data.limit) > 0) return clamp(Math.round((Number(data.remaining) / Number(data.limit)) * 100));
       return 0;
+    }
+
+    function displayPlan(data) {
+      const raw = String(data.planType || data.plan || data.membership || data.tier || "").trim();
+      if (!raw) return "--";
+      const key = raw.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (key === "prolite" || key === "pro" || key === "professional") return "PRO";
+      if (key === "plus") return "PLUS";
+      if (key === "team") return "TEAM";
+      if (key === "enterprise") return "ENT";
+      return raw.toUpperCase();
     }
 
     function labelForWindow(label, fallback) {
