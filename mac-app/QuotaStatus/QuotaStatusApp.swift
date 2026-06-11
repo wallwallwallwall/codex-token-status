@@ -43,7 +43,7 @@ struct QuotaPanelView: View {
     GeometryReader { proxy in
       let side = min(proxy.size.width, proxy.size.height)
       let scale = max(0.78, min(1.65, side / 360))
-      let outerInset = max(6, min(12, side * 0.024))
+      let outerInset = max(2, min(7, side * 0.014))
       let panelCorner = max(24, min(42, side * 0.078))
       let contentPadding = max(18, min(40, side * 0.068))
       let contentTopPadding = max(22, min(42, side * 0.074))
@@ -53,9 +53,9 @@ struct QuotaPanelView: View {
       ZStack {
         LinearGradient(
           colors: [
-            Color(red: 0.62, green: 0.83, blue: 1.0),
-            Color(red: 0.82, green: 0.95, blue: 1.0),
-            Color(red: 0.50, green: 0.80, blue: 0.93),
+            Color(red: 0.04, green: 0.24, blue: 0.23),
+            Color(red: 0.03, green: 0.13, blue: 0.16),
+            Color(red: 0.02, green: 0.08, blue: 0.12),
           ],
           startPoint: .topLeading,
           endPoint: .bottomTrailing
