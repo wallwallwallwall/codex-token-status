@@ -28,10 +28,20 @@ to `https://api.wals.top` by default. Override with `TOKEN_USAGE_READ_API` if ne
 ./mac-app/install-mac-app.sh [accountId]
 ```
 
-默认账户为 `mac-codex`。安装后应用位于：
+默认标题账户为 `mac-codex`。安装后应用位于：
 
 ```text
 ~/Applications/QuotaStatus.app
 ```
 
-这个版本是 SwiftUI 原生窗口，直接请求 NAS 接口，不依赖浏览器。
+这个版本是 SwiftUI 原生窗口，直接读取本机 Codex 的 rate limit 数据，不依赖浏览器，也不依赖 NAS 接口。默认会调用：
+
+```text
+/Applications/Codex.app/Contents/Resources/codex
+```
+
+如果 Codex 安装路径不同，可通过环境变量覆盖：
+
+```bash
+TOKEN_USAGE_CODEX_COMMAND=/path/to/codex ./mac-app/install-mac-app.sh mac-codex
+```

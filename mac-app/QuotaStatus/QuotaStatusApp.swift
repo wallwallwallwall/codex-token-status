@@ -323,15 +323,16 @@ final class QuotaViewModel: ObservableObject {
   @Published var stale = false
 
   private let accountId: String
-  private let apiBase: String
+  private let codexCommand: String
   private var timer: Timer?
 
   init() {
     accountId = Self.argumentValue("accountId") ??
       ProcessInfo.processInfo.environment["TOKEN_USAGE_ACCOUNT_ID"] ??
       "mac-codex"
-    apiBase = (ProcessInfo.processInfo.environment["TOKEN_USAGE_READ_API"] ?? "https://api.wals.top")
-      .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    codexCommand = Self.argumentValue("codexCommand") ??
+      ProcessInfo.processInfo.environment["TOKEN_USAGE_CODEX_COMMAND"] ??
+      Self.defaultCodexCommand()
 
     load()
     timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
@@ -348,46 +349,28 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func fetchStatus() async {
-    guard let encoded = accountId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-          let url = URL(string: "\(apiBase)/api/token-usage/status?accountId=\(encoded)") else {
-      signalText = "地址错误"
-      stale = true
-      return
-    }
-
     do {
-      var request = URLRequest(url: url)
-      request.cachePolicy = .reloadIgnoringLocalCacheData
-      request.timeoutInterval = 15
-      request.setValue("application/json", forHTTPHeaderField: "accept")
-
-      let (data, response) = try await URLSession.shared.data(for: request)
-      guard let httpResponse = response as? HTTPURLResponse else {
-        throw FetchError.invalidResponse
+      let envelope = try await CodexRateLimitReader(command: codexCommand).read()
+      guard let snapshot = envelope.snapshot else {
+        throw FetchError.missingRateLimits
       }
-      guard (200..<300).contains(httpResponse.statusCode) else {
-        throw FetchError.httpStatus(httpResponse.statusCode)
-      }
-
-      let decoded = try JSONDecoder().decode(StatusResponse.self, from: data)
-      apply(decoded)
+      apply(snapshot)
     } catch {
       stale = true
       signalText = error.userFacingMessage
     }
   }
 
-  private func apply(_ response: StatusResponse) {
-    let windows = response.usageRemaining?.windows ?? []
-    let weekly = windows.first { ($0.label ?? "").lowercased() == "weekly" } ?? windows.last
-    let short = windows.first { ($0.label ?? "").lowercased() != "weekly" } ?? weekly
-    let percent = percentFrom(response: response, short: short, weekly: weekly)
+  private func apply(_ snapshot: CodexRateLimitSnapshot) {
+    let short = displayWindow(snapshot.primary, label: "5h", resetKind: .time)
+    let weekly = displayWindow(snapshot.secondary, label: "Weekly", resetKind: .date)
+    let percent = percentFrom(short: short, weekly: weekly)
 
-    title = response.label ?? titleFromAccount(response.accountId ?? accountId)
-    planText = planDisplay(response)
+    title = titleFromAccount(accountId)
+    planText = planDisplay(snapshot.planType)
     primaryPercent = percent
-    stale = response.stale ?? false
-    signalText = stale ? "数据过期" : signalFor(percent)
+    stale = false
+    signalText = signalFor(percent)
 
     shortLabel = labelForWindow(short?.label, fallback: "5小时窗口")
     shortPercentText = percentText(short)
@@ -397,13 +380,29 @@ final class QuotaViewModel: ObservableObject {
     weeklyResetText = resetText(weekly)
   }
 
-  private func percentFrom(response: StatusResponse, short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
+  private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
     if let value = short?.percent { return clamp(value) }
     if let value = weekly?.percent { return clamp(value) }
-    if let remaining = response.remaining, let limit = response.limit, limit > 0 {
-      return clamp((remaining / limit) * 100)
-    }
     return 0
+  }
+
+  private func displayWindow(_ window: CodexRateLimitWindow?, label: String, resetKind: ResetKind) -> QuotaWindow? {
+    guard let usedPercent = window?.usedPercent else { return nil }
+    let percent = clamp(100 - usedPercent)
+    let resetText: String
+    if let resetsAt = window?.resetsAt {
+      let resetDate = Date(timeIntervalSince1970: resetsAt)
+      resetText = resetKind == .time ? Self.clockFormatter.string(from: resetDate) : Self.monthDayFormatter.string(from: resetDate)
+    } else {
+      resetText = ""
+    }
+    return QuotaWindow(
+      label: label,
+      percent: Double(percent),
+      percentText: "\(percent)%",
+      resetText: resetText,
+      resetAt: nil
+    )
   }
 
   private func percentText(_ window: QuotaWindow?) -> String {
@@ -427,9 +426,8 @@ final class QuotaViewModel: ObservableObject {
     return label
   }
 
-  private func planDisplay(_ response: StatusResponse) -> String {
-    let raw = response.planType ?? response.plan ?? response.membership ?? response.tier ?? ""
-    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+  private func planDisplay(_ rawValue: String?) -> String {
+    let trimmed = String(rawValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return "--" }
 
     let key = trimmed
@@ -474,31 +472,201 @@ final class QuotaViewModel: ObservableObject {
     let prefix = "--\(name)="
     return CommandLine.arguments.first { $0.hasPrefix(prefix) }?.dropFirst(prefix.count).description
   }
+
+  private static func defaultCodexCommand() -> String {
+    let bundledPath = "/Applications/Codex.app/Contents/Resources/codex"
+    if FileManager.default.isExecutableFile(atPath: bundledPath) {
+      return bundledPath
+    }
+    return "codex"
+  }
+
+  private static let clockFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "zh_CN")
+    formatter.dateFormat = "HH:mm"
+    return formatter
+  }()
+
+  private static let monthDayFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "zh_CN")
+    formatter.dateFormat = "M月d日"
+    return formatter
+  }()
 }
 
-struct StatusResponse: Decodable {
-  let accountId: String?
-  let label: String?
-  let planType: String?
-  let plan: String?
-  let membership: String?
-  let tier: String?
-  let stale: Bool?
-  let remaining: Double?
-  let limit: Double?
-  let usageRemaining: UsageRemaining?
+enum ResetKind {
+  case time
+  case date
 }
 
-struct UsageRemaining: Decodable {
-  let windows: [QuotaWindow]?
-}
-
-struct QuotaWindow: Decodable {
+struct QuotaWindow {
   let label: String?
   let percent: Double?
   let percentText: String?
   let resetText: String?
   let resetAt: String?
+}
+
+struct CodexRateLimitEnvelope: Decodable {
+  let rateLimitsByLimitId: [String: CodexRateLimitSnapshot]?
+  let rateLimits: CodexRateLimitSnapshot?
+  let planType: String?
+  let primary: CodexRateLimitWindow?
+  let secondary: CodexRateLimitWindow?
+
+  var snapshot: CodexRateLimitSnapshot? {
+    if let codex = rateLimitsByLimitId?["codex"] {
+      return codex
+    }
+    if let rateLimits {
+      return rateLimits
+    }
+    if planType != nil || primary != nil || secondary != nil {
+      return CodexRateLimitSnapshot(planType: planType, primary: primary, secondary: secondary)
+    }
+    return nil
+  }
+}
+
+struct CodexRateLimitSnapshot: Decodable {
+  let planType: String?
+  let primary: CodexRateLimitWindow?
+  let secondary: CodexRateLimitWindow?
+}
+
+struct CodexRateLimitWindow: Decodable {
+  let usedPercent: Double?
+  let windowDurationMins: Double?
+  let resetsAt: Double?
+}
+
+final class CodexRateLimitReader {
+  private let command: String
+  private let timeout: TimeInterval
+
+  init(command: String, timeout: TimeInterval = 30) {
+    self.command = command
+    self.timeout = timeout
+  }
+
+  func read() async throws -> CodexRateLimitEnvelope {
+    let command = command
+    let timeout = timeout
+
+    return try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        let process = Process()
+        let inputPipe = Pipe()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+
+        if command.contains("/") {
+          process.executableURL = URL(fileURLWithPath: command)
+          process.arguments = ["app-server", "--stdio"]
+        } else {
+          process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+          process.arguments = [command, "app-server", "--stdio"]
+        }
+        process.standardInput = inputPipe
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        func send(_ object: [String: Any]) throws {
+          let data = try JSONSerialization.data(withJSONObject: object)
+          inputPipe.fileHandleForWriting.write(data)
+          inputPipe.fileHandleForWriting.write(Data([0x0a]))
+        }
+
+        do {
+          try process.run()
+          DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+            if process.isRunning {
+              process.terminate()
+            }
+          }
+
+          try send([
+            "id": 1,
+            "method": "initialize",
+            "params": [
+              "clientInfo": [
+                "name": "quota-status",
+                "version": "1.0.0",
+              ],
+              "capabilities": [
+                "experimentalApi": true,
+              ],
+            ],
+          ])
+
+          var buffer = ""
+          var sentRead = false
+
+          while true {
+            let data = outputPipe.fileHandleForReading.availableData
+            if data.isEmpty {
+              break
+            }
+            guard let text = String(data: data, encoding: .utf8) else {
+              continue
+            }
+            buffer += text
+
+            let lines = buffer.split(separator: "\n", omittingEmptySubsequences: false)
+            buffer = lines.last.map(String.init) ?? ""
+
+            for line in lines.dropLast() {
+              guard !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    let lineData = String(line).data(using: .utf8),
+                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                    let id = json["id"] as? Int else {
+                continue
+              }
+
+              if id == 1, !sentRead {
+                sentRead = true
+                try send(["id": 2, "method": "account/rateLimits/read"])
+                continue
+              }
+
+              if id == 2 {
+                if let errorValue = json["error"] {
+                  throw FetchError.codexProcess(String(describing: errorValue))
+                }
+                guard let result = json["result"] else {
+                  throw FetchError.missingRateLimits
+                }
+                let data = try JSONSerialization.data(withJSONObject: result)
+                let decoded = try JSONDecoder().decode(CodexRateLimitEnvelope.self, from: data)
+                if process.isRunning {
+                  process.terminate()
+                }
+                continuation.resume(returning: decoded)
+                return
+              }
+            }
+          }
+
+          let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+          let errorText = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          if errorText.isEmpty {
+            continuation.resume(throwing: FetchError.timeout)
+          } else {
+            continuation.resume(throwing: FetchError.codexProcess(errorText))
+          }
+        } catch {
+          if process.isRunning {
+            process.terminate()
+          }
+          let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+          let errorText = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          continuation.resume(throwing: errorText.isEmpty ? error : FetchError.codexProcess(errorText))
+        }
+      }
+    }
+  }
 }
 
 struct Palette {
@@ -577,15 +745,18 @@ struct RGB {
 }
 
 enum FetchError: LocalizedError {
-  case invalidResponse
-  case httpStatus(Int)
+  case missingRateLimits
+  case codexProcess(String)
+  case timeout
 
   var errorDescription: String? {
     switch self {
-    case .invalidResponse:
-      return "响应异常"
-    case .httpStatus(let status):
-      return "HTTP \(status)"
+    case .missingRateLimits:
+      return "未读取到额度"
+    case .codexProcess(let message):
+      return message.isEmpty ? "Codex 读取失败" : message
+    case .timeout:
+      return "Codex 读取超时"
     }
   }
 }
