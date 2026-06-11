@@ -9,11 +9,9 @@ struct QuotaStatusApp: App {
   var body: some Scene {
     WindowGroup {
       QuotaPanelView()
-        .frame(width: 360, height: 360)
-        .fixedSize()
+        .frame(minWidth: 280, idealWidth: 360, maxWidth: .infinity, minHeight: 280, idealHeight: 360, maxHeight: .infinity)
     }
     .windowStyle(.hiddenTitleBar)
-    .windowResizability(.contentSize)
   }
 }
 
@@ -25,14 +23,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       guard let window = NSApp.windows.first else { return }
       window.title = "Quota Status"
       window.setContentSize(NSSize(width: 360, height: 360))
-      window.minSize = NSSize(width: 360, height: 360)
-      window.maxSize = NSSize(width: 360, height: 360)
+      window.minSize = NSSize(width: 280, height: 280)
+      window.contentAspectRatio = NSSize(width: 1, height: 1)
       window.center()
       window.titlebarAppearsTransparent = true
       window.isMovableByWindowBackground = true
       window.backgroundColor = .clear
       window.isOpaque = false
-      window.standardWindowButton(.zoomButton)?.isHidden = true
     }
   }
 }
@@ -43,116 +40,131 @@ struct QuotaPanelView: View {
   var body: some View {
     let palette = Palette.forPercent(model.stale ? 0 : model.primaryPercent)
 
-    ZStack {
-      LinearGradient(
-        colors: [
-          Color(red: 0.62, green: 0.83, blue: 1.0),
-          Color(red: 0.82, green: 0.95, blue: 1.0),
-          Color(red: 0.50, green: 0.80, blue: 0.93),
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-      .ignoresSafeArea()
+    GeometryReader { proxy in
+      let side = min(proxy.size.width, proxy.size.height)
+      let scale = max(0.78, min(1.65, side / 360))
+      let outerInset = max(6, min(12, side * 0.024))
+      let panelCorner = max(24, min(42, side * 0.078))
+      let contentPadding = max(18, min(40, side * 0.068))
+      let contentTopPadding = max(22, min(42, side * 0.074))
+      let contentBottomPadding = max(18, min(36, side * 0.064))
+      let gaugeSize = max(132, min(side * 0.47, side - contentTopPadding - contentBottomPadding - 132 * scale))
 
-      RoundedRectangle(cornerRadius: 34, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [
-              Color(red: 0.08, green: 0.18, blue: 0.22).opacity(0.98),
-              Color(red: 0.04, green: 0.10, blue: 0.14).opacity(0.98),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
+      ZStack {
+        LinearGradient(
+          colors: [
+            Color(red: 0.62, green: 0.83, blue: 1.0),
+            Color(red: 0.82, green: 0.95, blue: 1.0),
+            Color(red: 0.50, green: 0.80, blue: 0.93),
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
         )
-        .overlay(
-          RoundedRectangle(cornerRadius: 34, style: .continuous)
-            .stroke(Color.white.opacity(0.16), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.34), radius: 28, x: 0, y: 18)
-        .padding(12)
+        .ignoresSafeArea()
 
-      VStack(spacing: 12) {
-        header(palette: palette)
-
-        Spacer(minLength: 0)
-
-        LiquidGauge(
-          percent: model.primaryPercent,
-          palette: palette
-        )
-        .frame(width: 170, height: 170)
-
-        Spacer(minLength: 0)
-
-        HStack(spacing: 10) {
-          MetricCard(
-            label: model.shortLabel,
-            percent: model.shortPercentText,
-            reset: model.shortResetText,
-            palette: palette,
-            highlighted: true
+        RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [
+                Color(red: 0.08, green: 0.18, blue: 0.22).opacity(0.98),
+                Color(red: 0.04, green: 0.10, blue: 0.14).opacity(0.98),
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
           )
-
-          MetricCard(
-            label: model.weeklyLabel,
-            percent: model.weeklyPercentText,
-            reset: model.weeklyResetText,
-            palette: palette,
-            highlighted: false
+          .overlay(
+            RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
+              .stroke(Color.white.opacity(0.16), lineWidth: 1)
           )
+          .shadow(color: Color.black.opacity(0.30), radius: 22 * scale, x: 0, y: 13 * scale)
+          .padding(outerInset)
+
+        VStack(spacing: 12 * scale) {
+          header(palette: palette, scale: scale)
+
+          Spacer(minLength: 0)
+
+          LiquidGauge(
+            percent: model.primaryPercent,
+            palette: palette
+          )
+          .frame(width: gaugeSize, height: gaugeSize)
+
+          Spacer(minLength: 0)
+
+          HStack(spacing: 10 * scale) {
+            MetricCard(
+              label: model.shortLabel,
+              percent: model.shortPercentText,
+              reset: model.shortResetText,
+              palette: palette,
+              highlighted: true,
+              scale: scale
+            )
+
+            MetricCard(
+              label: model.weeklyLabel,
+              percent: model.weeklyPercentText,
+              reset: model.weeklyResetText,
+              palette: palette,
+              highlighted: false,
+              scale: scale
+            )
+          }
         }
+        .padding(.horizontal, contentPadding)
+        .padding(.top, contentTopPadding)
+        .padding(.bottom, contentBottomPadding)
       }
-      .padding(.horizontal, 28)
-      .padding(.top, 28)
-      .padding(.bottom, 26)
+      .frame(width: side, height: side)
+      .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
     }
   }
 
-  private func header(palette: Palette) -> some View {
-    HStack(spacing: 10) {
+  private func header(palette: Palette, scale: Double) -> some View {
+    HStack(spacing: 10 * scale) {
       Circle()
         .fill(palette.tone)
-        .frame(width: 18, height: 18)
-        .shadow(color: palette.tone.opacity(0.76), radius: 12, x: 0, y: 0)
+        .frame(width: 18 * scale, height: 18 * scale)
+        .shadow(color: palette.tone.opacity(0.76), radius: 10 * scale, x: 0, y: 0)
         .overlay(
           Circle()
-            .stroke(palette.tone.opacity(0.22), lineWidth: 10)
+            .stroke(palette.tone.opacity(0.22), lineWidth: 8 * scale)
         )
 
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 3 * scale) {
         Text(model.title)
-          .font(.system(size: 22, weight: .black, design: .rounded))
+          .font(.system(size: 22 * scale, weight: .black, design: .rounded))
           .foregroundStyle(.white)
           .lineLimit(1)
           .minimumScaleFactor(0.72)
 
         Text(model.signalText)
-          .font(.system(size: 14, weight: .heavy, design: .rounded))
+          .font(.system(size: 14 * scale, weight: .heavy, design: .rounded))
           .foregroundStyle(Color.white.opacity(0.72))
           .lineLimit(1)
           .minimumScaleFactor(0.7)
       }
 
-      Spacer(minLength: 6)
+      Spacer(minLength: 6 * scale)
 
-      VStack(spacing: 3) {
+      VStack(spacing: 3 * scale) {
         Text("计划")
-          .font(.system(size: 10, weight: .heavy, design: .rounded))
+          .font(.system(size: 10 * scale, weight: .heavy, design: .rounded))
           .foregroundStyle(Color.white.opacity(0.72))
         Text(model.planText)
-          .font(.system(size: 20, weight: .black, design: .rounded))
+          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
           .foregroundStyle(palette.tone)
           .lineLimit(1)
           .minimumScaleFactor(0.66)
       }
-      .frame(minWidth: 70)
-      .padding(.vertical, 7)
-      .padding(.horizontal, 10)
-      .background(palette.tone.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .frame(minWidth: 70 * scale)
+      .padding(.vertical, 7 * scale)
+      .padding(.horizontal, 10 * scale)
+      .background(palette.tone.opacity(0.18), in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
       .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
           .stroke(palette.tone.opacity(0.55), lineWidth: 1)
       )
     }
@@ -184,11 +196,11 @@ struct LiquidGauge: View {
 
         WaveShape(progress: progress)
           .fill(
-            LinearGradient(
-              colors: [palette.liquidTop, palette.liquidMid, palette.liquidBottom],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
-            )
+          LinearGradient(
+            colors: [palette.liquidTop, palette.liquidMid, palette.liquidBottom],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
           )
           .clipShape(Circle())
 
@@ -205,14 +217,15 @@ struct LiquidGauge: View {
             )
           )
 
-        VStack(spacing: 5) {
+        VStack(spacing: max(3, size * 0.03)) {
           Text("\(percent)%")
-            .font(.system(size: 54, weight: .black, design: .rounded))
+            .font(.system(size: max(38, size * 0.32), weight: .black, design: .rounded))
             .foregroundStyle(.white)
             .monospacedDigit()
+            .minimumScaleFactor(0.68)
             .shadow(color: Color.black.opacity(0.22), radius: 8, x: 0, y: 4)
           Text("剩余")
-            .font(.system(size: 20, weight: .black, design: .rounded))
+            .font(.system(size: max(15, size * 0.12), weight: .black, design: .rounded))
             .foregroundStyle(.white.opacity(0.86))
         }
       }
@@ -258,40 +271,41 @@ struct MetricCard: View {
   let reset: String
   let palette: Palette
   let highlighted: Bool
+  let scale: Double
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 7) {
+    VStack(alignment: .leading, spacing: 7 * scale) {
       Text(label)
-        .font(.system(size: 13, weight: .black, design: .rounded))
+        .font(.system(size: 13 * scale, weight: .black, design: .rounded))
         .foregroundStyle(Color.white.opacity(0.68))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
 
-      HStack(alignment: .lastTextBaseline, spacing: 8) {
+      HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
         Text(percent)
-          .font(.system(size: 20, weight: .black, design: .rounded))
+          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
           .foregroundStyle(.white)
           .monospacedDigit()
           .lineLimit(1)
           .minimumScaleFactor(0.72)
 
-        Spacer(minLength: 2)
+        Spacer(minLength: 2 * scale)
 
         Text(reset)
-          .font(.system(size: 15, weight: .black, design: .rounded))
+          .font(.system(size: 15 * scale, weight: .black, design: .rounded))
           .foregroundStyle(Color.white.opacity(0.64))
           .lineLimit(1)
           .minimumScaleFactor(0.64)
       }
     }
-    .padding(10)
-    .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+    .padding(10 * scale)
+    .frame(maxWidth: .infinity, minHeight: 72 * scale, alignment: .leading)
     .background(
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
+      RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
         .fill(highlighted ? palette.tone.opacity(0.20) : Color.white.opacity(0.08))
     )
     .overlay(
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
+      RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
         .stroke(highlighted ? palette.tone.opacity(0.56) : Color.white.opacity(0.16), lineWidth: 1)
     )
   }
