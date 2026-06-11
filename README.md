@@ -21,3 +21,17 @@ The server proxies:
 ```
 
 to `https://api.wals.top` by default. Override with `TOKEN_USAGE_READ_API` if needed.
+
+原生 Mac 应用:
+
+```bash
+./mac-app/install-mac-app.sh [accountId]
+```
+
+默认账户为 `mac-codex`。安装后应用位于：
+
+```text
+~/Applications/QuotaStatus.app
+```
+
+这个版本是 SwiftUI 原生窗口，直接请求 NAS 接口，不依赖浏览器。

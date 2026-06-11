@@ -8,5 +8,6 @@
 
 .runtime/
 .superpowers/
+dist/
 work/
 outputs/

@@ -22,7 +22,14 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    if (request.method === "GET" && (
+      url.pathname === "/" ||
+      url.pathname === "/index.html" ||
+      url.pathname === "/pet.html" ||
+      url.pathname === "/pet" ||
+      url.pathname === "/desktop-widget.html" ||
+      url.pathname === "/widget.html"
+    )) {
       await sendFile("clean.html", response);
       return;
     }
