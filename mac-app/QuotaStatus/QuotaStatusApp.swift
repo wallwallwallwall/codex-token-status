@@ -27,9 +27,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       window.contentAspectRatio = NSSize(width: 1, height: 1)
       window.center()
       window.titlebarAppearsTransparent = true
+      window.titleVisibility = .hidden
       window.isMovableByWindowBackground = true
       window.backgroundColor = NSColor(red: 0.02, green: 0.08, blue: 0.10, alpha: 1)
       window.isOpaque = true
+      window.standardWindowButton(.closeButton)?.isHidden = true
+      window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+      window.standardWindowButton(.zoomButton)?.isHidden = true
     }
   }
 }
@@ -43,7 +47,7 @@ struct QuotaPanelView: View {
     GeometryReader { proxy in
       let base = min(proxy.size.width, proxy.size.height)
       let scale = max(0.78, min(1.65, base / 360))
-      let panelCorner = max(24, min(42, base * 0.078))
+      let panelCorner = max(18, min(30, base * 0.058))
       let contentPadding = max(18, min(40, base * 0.068))
       let contentTopPadding = max(22, min(42, base * 0.074))
       let contentBottomPadding = max(18, min(36, base * 0.064))
@@ -71,10 +75,6 @@ struct QuotaPanelView: View {
               startPoint: .topLeading,
               endPoint: .bottomTrailing
             )
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
-              .stroke(Color.white.opacity(0.16), lineWidth: 1)
           )
           .shadow(color: Color.black.opacity(0.30), radius: 22 * scale, x: 0, y: 13 * scale)
 
