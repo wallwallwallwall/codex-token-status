@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quota Display</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #b9e6ff;
+      --bg-2: #d6f1ff;
+      --panel: #142631;
+      --panel-2: #0d1a24;
+      --glass: rgba(26, 52, 62, 0.74);
+      --glass-strong: rgba(27, 75, 67, 0.62);
+      --line: rgba(255, 255, 255, 0.15);
+      --line-strong: rgba(72, 230, 169, 0.58);
+      --text: #f7fbff;
+      --muted: rgba(222, 239, 246, 0.64);
+      --soft: rgba(222, 239, 246, 0.38);
+      --good: #43e48d;
+      --good-2: #21bdf0;
+      --warn: #ffc76a;
+      --bad: #ff716f;
+      --level: 50%;
+      --tone: var(--good);
+      --tone-soft: rgba(67, 228, 141, 0.2);
+      --tone-shadow: rgba(67, 228, 141, 0.14);
+      --page-glow: rgba(103, 236, 205, 0.55);
+      --panel-glow: rgba(63, 237, 158, 0.22);
+      --liquid-top: rgba(150, 255, 203, 0.92);
+      --liquid-mid: rgba(40, 198, 240, 0.95);
+      --liquid-bottom: rgba(24, 141, 232, 0.92);
+      --liquid-crest: rgba(195, 255, 230, 0.34);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 18%, var(--page-glow), transparent 24%),
+        radial-gradient(circle at 80% 34%, rgba(255, 255, 255, 0.54), transparent 22%),
+        linear-gradient(135deg, #9fd4ff 0%, #cef2ff 46%, #c1e9ff 100%);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.22), transparent 34%),
+        radial-gradient(circle at 50% 110%, rgba(20, 86, 116, 0.2), transparent 34%);
+    }
+
+    .app {
+      position: relative;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: clamp(10px, 3vmin, 24px);
+    }
+
+    .showcase {
+      display: grid;
+      place-items: center;
+    }
+
+    .quota-panel {
+      width: min(88vmin, 520px);
+      aspect-ratio: 1;
+      border-radius: 32px;
+      padding: clamp(18px, 4.2vmin, 30px);
+      background:
+        radial-gradient(circle at 18% 20%, var(--panel-glow), transparent 26%),
+        radial-gradient(circle at 80% 18%, rgba(38, 197, 239, 0.13), transparent 26%),
+        radial-gradient(circle at 54% 120%, rgba(255, 255, 255, 0.08), transparent 36%),
+        linear-gradient(145deg, rgba(19, 47, 57, 0.98), rgba(11, 25, 36, 0.98));
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow:
+        0 32px 80px rgba(15, 86, 111, 0.28),
+        0 16px 44px rgba(5, 25, 35, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .quota-panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.12), transparent 30%),
+        radial-gradient(circle at 95% 5%, rgba(255, 255, 255, 0.1), transparent 18%);
+      opacity: 0.74;
+    }
+
+    .panel-head,
+    .panel-grid {
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: clamp(8px, 2.6vmin, 16px);
+      margin-bottom: clamp(8px, 2.6vmin, 16px);
+    }
+
+    .status-light {
+      width: clamp(14px, 5vmin, 30px);
+      height: clamp(14px, 5vmin, 30px);
+      border-radius: 50%;
+      background: var(--tone);
+      box-shadow:
+        0 0 0 clamp(4px, 1.9vmin, 10px) var(--tone-soft),
+        0 0 clamp(16px, 6vmin, 30px) var(--tone),
+        inset 0 -5px 10px rgba(0, 0, 0, 0.22),
+        inset 0 5px 10px rgba(255, 255, 255, 0.32);
+    }
+
+    .title-block h2 {
+      margin: 0;
+      font-size: clamp(17px, 6vmin, 32px);
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .title-block p {
+      margin: clamp(2px, 1vmin, 6px) 0 0;
+      color: var(--muted);
+      font-size: clamp(10px, 3.1vmin, 16px);
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .plan-pill {
+      min-width: clamp(42px, 14vmin, 76px);
+      padding: clamp(4px, 1.4vmin, 8px) clamp(8px, 2vmin, 12px);
+      border-radius: clamp(8px, 2.6vmin, 14px);
+      color: var(--tone);
+      text-align: center;
+      background: var(--tone-soft);
+      border: 1px solid var(--line-strong);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11);
+    }
+
+    .plan-pill span {
+      display: block;
+      color: var(--muted);
+      font-size: clamp(7px, 2vmin, 10px);
+      line-height: 1;
+      font-weight: 780;
+    }
+
+    .plan-pill strong {
+      display: block;
+      margin-top: 2px;
+      font-size: clamp(13px, 4vmin, 22px);
+      line-height: 1;
+      font-weight: 920;
+    }
+
+    .panel-grid {
+      display: grid;
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: clamp(8px, 2.6vmin, 16px);
+    }
+
+    .liquid-wrap {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+    }
+
+    .liquid-orb {
+      width: min(54vmin, 250px);
+      height: min(54vmin, 250px);
+      border-radius: 50%;
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 36% 18%, rgba(255, 255, 255, 0.48), transparent 14%),
+        radial-gradient(circle at 50% 100%, rgba(43, 204, 245, 0.5), transparent 55%),
+        rgba(29, 47, 56, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      box-shadow:
+        inset 0 16px 36px rgba(255, 255, 255, 0.13),
+        inset 0 -22px 36px rgba(0, 0, 0, 0.26),
+        0 22px 50px rgba(0, 0, 0, 0.24);
+    }
+
+    .liquid-fill {
+      position: absolute;
+      left: -8%;
+      right: -8%;
+      bottom: 0;
+      height: var(--level);
+      background:
+        linear-gradient(145deg, var(--liquid-top), var(--liquid-mid) 52%, var(--liquid-bottom));
+      box-shadow: inset 0 20px 40px rgba(255, 255, 255, 0.12);
+      transition: height 420ms ease, background 420ms ease;
+    }
+
+    .liquid-fill::before,
+    .liquid-fill::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -14px;
+      width: 120%;
+      height: 32px;
+      border-radius: 45%;
+      transform: translateX(-50%);
+      background: var(--liquid-crest);
+    }
+
+    .liquid-fill::after {
+      width: 86%;
+      top: -8px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .orb-glass {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        linear-gradient(150deg, rgba(255, 255, 255, 0.25), transparent 28%),
+        radial-gradient(circle at 38% 24%, rgba(255, 255, 255, 0.38), transparent 12%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 42%, rgba(255, 255, 255, 0.08));
+      pointer-events: none;
+    }
+
+    .orb-value {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      text-shadow: 0 5px 20px rgba(0, 0, 0, 0.24);
+    }
+
+    .orb-value strong {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      font-size: clamp(44px, 17vmin, 82px);
+      line-height: 0.92;
+      font-weight: 920;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .orb-value strong small {
+      font-size: 0.48em;
+      vertical-align: 20%;
+    }
+
+    .orb-value span {
+      display: block;
+      margin-top: clamp(4px, 1.6vmin, 10px);
+      font-size: clamp(13px, 4vmin, 23px);
+      line-height: 1;
+      font-weight: 860;
+    }
+
+    .window-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(7px, 2vmin, 12px);
+    }
+
+    .window-card {
+      min-height: clamp(50px, 15vmin, 78px);
+      display: grid;
+      align-content: center;
+      padding: clamp(8px, 2.4vmin, 14px);
+      border-radius: clamp(12px, 3vmin, 18px);
+      background: rgba(45, 65, 78, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 14px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .window-card.primary {
+      background: var(--glass-strong);
+      border-color: var(--line-strong);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 0 0 1px var(--tone-shadow),
+        0 18px 38px rgba(13, 93, 79, 0.16);
+    }
+
+    .window-card .label {
+      color: var(--muted);
+      font-size: clamp(11px, 3.2vmin, 17px);
+      line-height: 1.05;
+      font-weight: 870;
+    }
+
+    .window-card .quota-metric {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: baseline;
+      gap: clamp(5px, 1.6vmin, 10px);
+      margin-top: clamp(5px, 1.8vmin, 10px);
+      min-width: 0;
+    }
+
+    .quota-metric strong {
+      color: var(--text);
+      font-size: clamp(15px, 4.4vmin, 24px);
+      line-height: 1.05;
+      font-weight: 920;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .quota-metric span {
+      min-width: 0;
+      color: var(--muted);
+      font-size: clamp(10px, 3vmin, 16px);
+      line-height: 1.05;
+      font-weight: 820;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 820px) {
+      .app {
+        padding: 14px;
+      }
+
+      .quota-panel {
+        border-radius: 26px;
+      }
+
+      .liquid-orb {
+        width: min(50vmin, 230px);
+        height: min(50vmin, 230px);
+      }
+
+      .orb-value strong {
+        font-size: clamp(44px, 16vmin, 70px);
+      }
+    }
+
+    @media (max-width: 340px), (max-height: 340px) {
+      body {
+        background: #07141b;
+        overflow: hidden;
+      }
+
+      body::before {
+        display: none;
+      }
+
+      .app,
+      .showcase {
+        width: 100vw;
+        min-height: 100vh;
+        padding: 0;
+      }
+
+      .quota-panel {
+        width: 100vmin;
+        height: 100vmin;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+        padding: 10px;
+      }
+
+      .panel-head {
+        gap: 7px;
+        margin-bottom: 8px;
+      }
+
+      .status-light {
+        width: 14px;
+        height: 14px;
+      }
+
+      .title-block h2 {
+        font-size: 17px;
+      }
+
+      .title-block p {
+        font-size: 10px;
+      }
+
+      .plan-pill {
+        min-width: 42px;
+        padding: 4px 7px;
+      }
+
+      .plan-pill strong {
+        font-size: 13px;
+      }
+
+      .panel-grid {
+        gap: 8px;
+      }
+
+      .liquid-orb {
+        width: min(47vmin, 112px);
+        height: min(47vmin, 112px);
+      }
+
+      .orb-value strong {
+        font-size: 38px;
+      }
+
+      .orb-value span {
+        margin-top: 4px;
+        font-size: 12px;
+      }
+
+      .window-list {
+        gap: 7px;
+      }
+
+      .window-card {
+        min-height: 48px;
+        padding: 7px;
+        border-radius: 10px;
+      }
+
+      .window-card .label {
+        font-size: 10px;
+      }
+
+      .window-card .quota-metric {
+        margin-top: 4px;
+        gap: 4px;
+      }
+
+      .quota-metric strong {
+        font-size: 12px;
+      }
+
+      .quota-metric span {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="showcase">
+      <section class="quota-panel" aria-label="Quota preview">
+        <div class="panel-head">
+          <div class="status-light" id="statusLight"></div>
+          <div class="title-block">
+            <h2 id="heroTitle">Codex 额度</h2>
+            <p id="signalText">读取中</p>
+          </div>
+          <div class="plan-pill">
+            <span>计划</span>
+            <strong id="planText">PLUS</strong>
+          </div>
+        </div>
+
+        <div class="panel-grid">
+          <div class="liquid-wrap">
+            <div class="liquid-orb" aria-label="Remaining quota">
+              <div class="liquid-fill" id="liquidFill"></div>
+              <div class="orb-glass"></div>
+              <div class="orb-value">
+                <strong id="mainPercentText">--%</strong>
+                <span>剩余</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="window-list">
+            <article class="window-card primary">
+              <div class="label" id="shortLabel">5小时窗口</div>
+              <div class="quota-metric">
+                <strong id="shortPercent">--</strong>
+                <span id="shortReset">--</span>
+              </div>
+            </article>
+            <article class="window-card">
+              <div class="label" id="weeklyLabel">7天窗口</div>
+              <div class="quota-metric">
+                <strong id="weeklyPercent">--</strong>
+                <span id="weeklyReset">--</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    let currentAccount = new URL(location.href).searchParams.get("accountId") || "mac-codex";
+    const refreshIntervalMs = 5 * 60 * 1000;
+    const ui = {
+      heroTitle: document.getElementById("heroTitle"),
+      mainPercentText: document.getElementById("mainPercentText"),
+      planText: document.getElementById("planText"),
+      shortLabel: document.getElementById("shortLabel"),
+      shortPercent: document.getElementById("shortPercent"),
+      shortReset: document.getElementById("shortReset"),
+      signalText: document.getElementById("signalText"),
+      weeklyLabel: document.getElementById("weeklyLabel"),
+      weeklyPercent: document.getElementById("weeklyPercent"),
+      weeklyReset: document.getElementById("weeklyReset"),
+    };
+
+    query(currentAccount);
+    setInterval(() => query(currentAccount, { quiet: true }), refreshIntervalMs);
+
+    async function query(accountId, options = {}) {
+      if (!accountId) return;
+      if (!options.quiet) {
+        applyPalette(42);
+        setStatus("读取中");
+      }
+      const url = new URL(location.href);
+      url.searchParams.set("accountId", accountId);
+      history.replaceState(null, "", url);
+
+      try {
+        const response = await fetch(`/api/token-usage/status?accountId=${encodeURIComponent(accountId)}`);
+        const data = await response.json();
+        if (!response.ok) {
+          applyPalette(0, true);
+          setStatus(data.error || `HTTP ${response.status}`);
+          return;
+        }
+        render(data);
+      } catch (error) {
+        applyPalette(0, true);
+        setStatus(error.message);
+      }
+    }
+
+    function render(data) {
+      const windows = data.usageRemaining?.windows || [];
+      const weekly = windows.find((window) => /^weekly$/i.test(window.label)) || windows.at(-1) || {};
+      const short = windows.find((window) => !/^weekly$/i.test(window.label)) || weekly;
+      const percent = percentFrom(data, short, weekly);
+      const label = data.label || titleFromAccount(data.accountId);
+      const plan = data.planType || data.plan || data.membership || data.tier || "PLUS";
+
+      document.documentElement.style.setProperty("--level", `${percent}%`);
+      applyPalette(percent, data.stale);
+      ui.heroTitle.textContent = label;
+      ui.mainPercentText.textContent = `${percent}%`;
+      ui.shortLabel.textContent = labelForWindow(short.label, "5小时窗口");
+      ui.shortPercent.textContent = percentTextForWindow(short);
+      ui.shortReset.textContent = resetTextForWindow(short);
+      ui.weeklyLabel.textContent = labelForWindow(weekly.label, "7天窗口");
+      ui.weeklyPercent.textContent = percentTextForWindow(weekly);
+      ui.weeklyReset.textContent = resetTextForWindow(weekly);
+      ui.planText.textContent = String(plan).toUpperCase();
+      setStatus(data.stale ? "数据过期" : signalTextFor(percent));
+    }
+
+    function setStatus(text) {
+      ui.signalText.textContent = text;
+    }
+
+    function percentFrom(data, short, weekly) {
+      if (Number.isFinite(Number(short.percent))) return clamp(short.percent);
+      if (Number.isFinite(Number(weekly.percent))) return clamp(weekly.percent);
+      if (Number(data.limit) > 0) return clamp(Math.round((Number(data.remaining) / Number(data.limit)) * 100));
+      return 0;
+    }
+
+    function labelForWindow(label, fallback) {
+      if (!label) return fallback;
+      if (/^weekly$/i.test(label)) return "7天窗口";
+      if (/^5h$/i.test(label) || /^5H$/.test(label)) return "5小时窗口";
+      return label;
+    }
+
+    function percentTextForWindow(window) {
+      if (!window || window.percent == null) return "--";
+      return window.percentText || `${clamp(window.percent)}%`;
+    }
+
+    function resetTextForWindow(window) {
+      if (!window) return "--";
+      return window.resetText || window.resetAt || "--";
+    }
+
+    function applyPalette(percent, stale = false) {
+      const palette = paletteFor(stale ? 0 : percent);
+      const root = document.documentElement;
+      root.style.setProperty("--tone", rgbCss(palette.tone));
+      root.style.setProperty("--tone-soft", rgbaCss(palette.tone, 0.2));
+      root.style.setProperty("--tone-shadow", rgbaCss(palette.tone, 0.14));
+      root.style.setProperty("--line-strong", rgbaCss(palette.tone, 0.58));
+      root.style.setProperty("--glass-strong", rgbaCss(mixRgb([13, 28, 40], palette.tone, 0.28), 0.62));
+      root.style.setProperty("--page-glow", rgbaCss(palette.tone, 0.42));
+      root.style.setProperty("--panel-glow", rgbaCss(palette.tone, 0.24));
+      root.style.setProperty("--liquid-top", rgbaCss(palette.liquidTop, 0.92));
+      root.style.setProperty("--liquid-mid", rgbaCss(palette.liquidMid, 0.95));
+      root.style.setProperty("--liquid-bottom", rgbaCss(palette.liquidBottom, 0.92));
+      root.style.setProperty("--liquid-crest", rgbaCss(mixRgb([255, 255, 255], palette.tone, 0.35), 0.34));
+    }
+
+    function paletteFor(percent) {
+      const anchors = [
+        {
+          percent: 0,
+          tone: hexToRgb("#ff716f"),
+          liquidTop: hexToRgb("#ffc4bf"),
+          liquidMid: hexToRgb("#ff8a7d"),
+          liquidBottom: hexToRgb("#d94b5e"),
+        },
+        {
+          percent: 50,
+          tone: hexToRgb("#ffc76a"),
+          liquidTop: hexToRgb("#ffe7ad"),
+          liquidMid: hexToRgb("#ffbd6a"),
+          liquidBottom: hexToRgb("#df8f39"),
+        },
+        {
+          percent: 100,
+          tone: hexToRgb("#43e48d"),
+          liquidTop: hexToRgb("#96ffcb"),
+          liquidMid: hexToRgb("#28c6f0"),
+          liquidBottom: hexToRgb("#188de8"),
+        },
+      ];
+      const value = clamp(percent);
+      const highIndex = anchors.findIndex((anchor) => value <= anchor.percent);
+      if (highIndex <= 0) return anchors[0];
+      const low = anchors[highIndex - 1];
+      const high = anchors[highIndex];
+      const t = (value - low.percent) / (high.percent - low.percent);
+      return interpolatePalette(low, high, t);
+    }
+
+    function interpolatePalette(low, high, t) {
+      return {
+        tone: mixRgb(low.tone, high.tone, t),
+        liquidTop: mixRgb(low.liquidTop, high.liquidTop, t),
+        liquidMid: mixRgb(low.liquidMid, high.liquidMid, t),
+        liquidBottom: mixRgb(low.liquidBottom, high.liquidBottom, t),
+      };
+    }
+
+    function mixRgb(start, end, amount) {
+      return start.map((channel, index) => Math.round(channel + (end[index] - channel) * amount));
+    }
+
+    function hexToRgb(hex) {
+      const value = hex.replace("#", "");
+      return [
+        Number.parseInt(value.slice(0, 2), 16),
+        Number.parseInt(value.slice(2, 4), 16),
+        Number.parseInt(value.slice(4, 6), 16),
+      ];
+    }
+
+    function rgbCss(rgb) {
+      return `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]})`;
+    }
+
+    function rgbaCss(rgb, alpha) {
+      return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+    }
+
+    function signalTextFor(percent) {
+      if (percent < 20) return "红灯";
+      if (percent < 50) return "黄灯";
+      return "绿灯";
+    }
+
+    function clamp(value) {
+      return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    }
+
+    function titleFromAccount(accountId) {
+      return String(accountId || "Account")
+        .split(/[-_.]+/)
+        .filter(Boolean)
+        .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+        .join(" ");
+    }
+  </script>
+</body>
+</html>

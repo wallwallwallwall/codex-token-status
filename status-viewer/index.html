@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Token Quota Status</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #15171a;
+      --muted: #6d747d;
+      --line: #d9dee3;
+      --surface: #ffffff;
+      --page: #eef1f4;
+      --green: #246f42;
+      --green-soft: #dfeee4;
+      --blue: #2c65d7;
+      --warning: #a35d00;
+      --bad: #b42318;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--ink);
+    }
+
+    .shell {
+      width: min(100%, 960px);
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+
+    .top {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      line-height: 1.15;
+      font-weight: 720;
+    }
+
+    .subtle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .query {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: min(100%, 380px);
+    }
+
+    input {
+      width: 220px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 11px;
+      font-size: 14px;
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    button {
+      height: 38px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 14px;
+      background: var(--ink);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .device-wrap {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: #171a1f;
+      border-radius: 8px;
+    }
+
+    .device {
+      width: 240px;
+      height: 240px;
+      background: #f8f9f8;
+      border: 8px solid #12151a;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      padding: 15px 17px 14px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .live {
+      position: absolute;
+      top: 9px;
+      right: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--green);
+      font-size: 9px;
+      font-weight: 760;
+    }
+
+    .live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 99px;
+      background: var(--green);
+    }
+
+    .mark {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 9px;
+      object-fit: contain;
+    }
+
+    .account {
+      text-align: center;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 18px;
+      font-weight: 680;
+      line-height: 1.05;
+      margin-bottom: 2px;
+    }
+
+    .caption {
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 720;
+    }
+
+    .main-percent {
+      align-self: center;
+      text-align: center;
+      font-size: 58px;
+      line-height: 1;
+      color: var(--green);
+      font-weight: 820;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .short-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 8px;
+      font-size: 18px;
+      font-weight: 780;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .short-row .reset {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .bar {
+      height: 15px;
+      border-radius: 99px;
+      background: var(--green-soft);
+      overflow: hidden;
+      border: 1px solid rgba(36, 111, 66, 0.18);
+      margin-bottom: 9px;
+    }
+
+    .bar span {
+      display: block;
+      width: var(--fill, 0%);
+      height: 100%;
+      background: var(--green);
+      border-radius: inherit;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .mini {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      padding: 4px;
+      background: #fff;
+    }
+
+    .mini .k {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 780;
+    }
+
+    .mini .v {
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.05;
+      font-weight: 820;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .dot.warn {
+      background: var(--warning);
+    }
+
+    .dot.bad {
+      background: var(--bad);
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px;
+      background: #fbfcfd;
+    }
+
+    .metric .name {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .metric .value {
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 760;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      margin: 14px 0 0;
+      padding: 12px;
+      max-height: 220px;
+      overflow: auto;
+      border-radius: 7px;
+      background: #11151a;
+      color: #dce7ee;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 760px) {
+      .top,
+      .query {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      input {
+        width: 100%;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .device-wrap {
+        padding: 18px;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="top">
+      <div>
+        <h1>Token quota status</h1>
+        <p class="subtle">Local viewer reads NAS status by account ID.</p>
+      </div>
+      <form class="query" id="queryForm">
+        <input id="accountInput" name="accountId" autocomplete="off" spellcheck="false" value="mac-codex" aria-label="Account ID">
+        <button type="submit">Query</button>
+      </form>
+    </section>
+
+    <section class="grid">
+      <div class="device-wrap">
+        <div class="device">
+          <div class="live" id="liveLabel">LIVE</div>
+          <img class="mark" alt="" src="https://cdn.simpleicons.org/openai/15171a">
+          <div>
+            <div class="account" id="accountLabel">Mac Codex</div>
+            <div class="caption" id="titleLabel">Usage remaining</div>
+          </div>
+          <div class="main-percent" id="mainPercent">--%</div>
+          <div>
+            <div class="short-row">
+              <span id="shortText">--</span>
+              <span class="reset" id="shortReset">--</span>
+            </div>
+            <div class="bar"><span id="barFill"></span></div>
+            <div class="bottom">
+              <div class="mini">
+                <div class="k">WEEKLY</div>
+                <div class="v" id="weeklyText">--%</div>
+              </div>
+              <div class="mini">
+                <div class="k">RESET</div>
+                <div class="v" id="resetText">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <div class="status-line"><span class="dot" id="statusDot"></span><span id="statusText">Waiting for query</span></div>
+        <div class="metrics">
+          <div class="metric"><div class="name">Account ID</div><div class="value" id="mAccount">--</div></div>
+          <div class="metric"><div class="name">Remaining</div><div class="value" id="mRemaining">--</div></div>
+          <div class="metric"><div class="name">Used</div><div class="value" id="mUsed">--</div></div>
+          <div class="metric"><div class="name">Reset At</div><div class="value" id="mReset">--</div></div>
+          <div class="metric"><div class="name">Received</div><div class="value" id="mReceived">--</div></div>
+          <div class="metric"><div class="name">Age</div><div class="value" id="mAge">--</div></div>
+        </div>
+        <pre id="rawJson">{}</pre>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("queryForm");
+    const input = document.getElementById("accountInput");
+    const ids = {
+      accountLabel: document.getElementById("accountLabel"),
+      barFill: document.getElementById("barFill"),
+      liveLabel: document.getElementById("liveLabel"),
+      mainPercent: document.getElementById("mainPercent"),
+      mAccount: document.getElementById("mAccount"),
+      mAge: document.getElementById("mAge"),
+      mReceived: document.getElementById("mReceived"),
+      mRemaining: document.getElementById("mRemaining"),
+      mReset: document.getElementById("mReset"),
+      mUsed: document.getElementById("mUsed"),
+      rawJson: document.getElementById("rawJson"),
+      resetText: document.getElementById("resetText"),
+      shortReset: document.getElementById("shortReset"),
+      shortText: document.getElementById("shortText"),
+      statusDot: document.getElementById("statusDot"),
+      statusText: document.getElementById("statusText"),
+      titleLabel: document.getElementById("titleLabel"),
+      weeklyText: document.getElementById("weeklyText"),
+    };
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const accountId = input.value.trim();
+      const nextUrl = new URL(location.href);
+      nextUrl.searchParams.set("accountId", accountId);
+      history.replaceState(null, "", nextUrl);
+      loadStatus(accountId);
+    });
+
+    const initialAccountId = new URL(location.href).searchParams.get("accountId") || "mac-codex";
+    input.value = initialAccountId;
+    loadStatus(initialAccountId);
+
+    async function loadStatus(accountId) {
+      setStatus("Loading", "warn");
+      const response = await fetch(`/api/token-usage/status?accountId=${encodeURIComponent(accountId)}`);
+      const data = await response.json();
+      ids.rawJson.textContent = JSON.stringify(data, null, 2);
+
+      if (!response.ok) {
+        setStatus(data.error || `HTTP ${response.status}`, "bad");
+        return;
+      }
+
+      render(data);
+    }
+
+    function render(data) {
+      const windows = data.usageRemaining?.windows || [];
+      const weekly = windows.find((window) => /^weekly$/i.test(window.label)) || windows.at(-1) || {};
+      const short = windows.find((window) => !/^weekly$/i.test(window.label)) || weekly;
+      const mainPercent = percentFromData(data, weekly);
+      const barPercent = clampPercent(short.percent ?? mainPercent);
+      const resetDate = formatDate(data.resetAt);
+
+      ids.accountLabel.textContent = data.label || titleFromAccount(data.accountId);
+      ids.titleLabel.textContent = data.usageRemaining?.title || "Usage remaining";
+      ids.mainPercent.textContent = `${mainPercent}%`;
+      ids.shortText.textContent = short.label ? `${short.label} ${short.percentText || `${short.percent}%`}` : "--";
+      ids.shortReset.textContent = short.resetText || "--";
+      ids.weeklyText.textContent = weekly.percentText || `${mainPercent}%`;
+      ids.resetText.textContent = weekly.resetText || resetDate;
+      ids.barFill.style.setProperty("--fill", `${barPercent}%`);
+      ids.liveLabel.textContent = data.stale ? "STALE" : "LIVE";
+
+      ids.mAccount.textContent = data.accountId;
+      ids.mRemaining.textContent = formatNumber(data.remaining);
+      ids.mUsed.textContent = formatNumber(data.used);
+      ids.mReset.textContent = resetDate;
+      ids.mReceived.textContent = formatDateTime(data.receivedAt);
+      ids.mAge.textContent = data.ageSeconds == null ? "--" : `${data.ageSeconds}s`;
+
+      setStatus(data.stale ? "NAS data is stale" : "NAS data is fresh", data.stale ? "warn" : "");
+    }
+
+    function setStatus(text, tone) {
+      ids.statusText.textContent = text;
+      ids.statusDot.classList.toggle("warn", tone === "warn");
+      ids.statusDot.classList.toggle("bad", tone === "bad");
+    }
+
+    function percentFromData(data, weekly) {
+      if (Number.isFinite(Number(weekly.percent))) {
+        return clampPercent(weekly.percent);
+      }
+      if (Number(data.limit) > 0) {
+        return clampPercent(Math.round((Number(data.remaining) / Number(data.limit)) * 100));
+      }
+      return 0;
+    }
+
+    function clampPercent(value) {
+      return Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+    }
+
+    function formatNumber(value) {
+      return new Intl.NumberFormat("en-US").format(Number(value) || 0);
+    }
+
+    function formatDate(value) {
+      if (!value) return "--";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(date);
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "--";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat("zh-CN", {
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(date);
+    }
+
+    function titleFromAccount(accountId) {
+      return String(accountId || "Account")
+        .split(/[-_.]+/)
+        .filter(Boolean)
+        .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+        .join(" ");
+    }
+  </script>
+</body>
+</html>
