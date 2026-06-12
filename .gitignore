@@ -5,6 +5,7 @@
 *.private.*
 *.log
 *.pid
+*.swp
 
 .runtime/
 .superpowers/

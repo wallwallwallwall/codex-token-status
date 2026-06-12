@@ -8,6 +8,8 @@
   <string>QuotaStatus</string>
   <key>CFBundleIdentifier</key>
   <string>top.wals.quotastatus</string>
+  <key>CFBundleIconFile</key>
+  <string>QuotaStatus</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

@@ -58,4 +58,4 @@ TOKEN_USAGE_CODEX_COMMAND=/path/to/codex ./mac-app/install-mac-app.sh mac-codex
 dist/QuotaStatus-1.0.0.pkg
 ```
 
-安装包会把应用安装到 `/Applications/QuotaStatus.app`。这是未公证的本地分享包，其他 Mac 首次打开时可能需要在系统设置里允许打开。
+构建时会自动生成深青色液态额度风格的应用图标。安装包会把应用安装到 `/Applications/QuotaStatus.app`。这是未公证的本地分享包，其他 Mac 首次打开时可能需要在系统设置里允许打开。

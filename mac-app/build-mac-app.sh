@@ -10,12 +10,14 @@ MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 SOURCE_FILE="${ROOT_DIR}/mac-app/QuotaStatus/QuotaStatusApp.swift"
 PLIST_FILE="${ROOT_DIR}/mac-app/QuotaStatus/Info.plist"
+ICON_SCRIPT="${ROOT_DIR}/mac-app/generate-icon.swift"
 BUILD_DIR="${ROOT_DIR}/dist/build"
 
 rm -rf "$APP_DIR"
 rm -rf "$BUILD_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$BUILD_DIR"
 cp "$PLIST_FILE" "${CONTENTS_DIR}/Info.plist"
+xcrun swift "$ICON_SCRIPT" "${RESOURCES_DIR}/QuotaStatus.icns"
 
 xcrun swiftc \
   -parse-as-library \
