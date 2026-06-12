@@ -191,15 +191,43 @@ struct LiquidGauge: View {
             )
           )
 
-        WaveShape(progress: progress)
-          .fill(
-          LinearGradient(
-            colors: [palette.liquidTop, palette.liquidMid, palette.liquidBottom],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-          )
+        TimelineView(.animation) { timeline in
+          let seconds = timeline.date.timeIntervalSinceReferenceDate
+          let phase = CGFloat(seconds.remainder(dividingBy: 3.2) / 3.2) * .pi * 2
+
+          ZStack {
+            WaveShape(
+              progress: progress,
+              phase: phase,
+              amplitudeRatio: 0.038,
+              wavelengthRatio: 1.22
+            )
+            .fill(
+              LinearGradient(
+                colors: [palette.liquidTop, palette.liquidMid, palette.liquidBottom],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+
+            WaveShape(
+              progress: min(1, progress + 0.035),
+              phase: phase * -0.72 + .pi * 0.55,
+              amplitudeRatio: 0.024,
+              wavelengthRatio: 0.92
+            )
+            .fill(Color.white.opacity(0.12))
+
+            WaveShape(
+              progress: min(1, progress + 0.018),
+              phase: phase + .pi * 0.3,
+              amplitudeRatio: 0.014,
+              wavelengthRatio: 1.05
+            )
+            .stroke(Color.white.opacity(0.18), lineWidth: max(1.2, size * 0.012))
+          }
           .clipShape(Circle())
+        }
 
         Circle()
           .fill(
@@ -237,13 +265,16 @@ struct LiquidGauge: View {
 
 struct WaveShape: Shape {
   let progress: CGFloat
+  let phase: CGFloat
+  let amplitudeRatio: CGFloat
+  let wavelengthRatio: CGFloat
 
   func path(in rect: CGRect) -> Path {
     var path = Path()
     let clamped = max(0, min(1, progress))
     let baseline = rect.maxY - rect.height * clamped
-    let amplitude = max(5, rect.height * 0.035)
-    let wavelength = rect.width / 1.35
+    let amplitude = max(4, rect.height * amplitudeRatio)
+    let wavelength = rect.width / max(0.2, wavelengthRatio)
 
     path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
     path.addLine(to: CGPoint(x: rect.minX, y: baseline))
@@ -251,7 +282,7 @@ struct WaveShape: Shape {
     var x = rect.minX
     while x <= rect.maxX {
       let relative = (x - rect.minX) / wavelength
-      let y = baseline + sin(relative * .pi * 2) * amplitude
+      let y = baseline + sin(relative * .pi * 2 + phase) * amplitude
       path.addLine(to: CGPoint(x: x, y: y))
       x += 2
     }
