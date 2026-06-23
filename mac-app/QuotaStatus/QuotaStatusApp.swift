@@ -52,33 +52,40 @@ struct QuotaPanelView: View {
       let base = min(proxy.size.width, proxy.size.height)
       let scale = max(0.78, min(1.65, base / 360))
       let panelCorner = max(18, min(30, base * 0.058))
-      let contentPadding = max(16, min(34, base * 0.056))
-      let contentTopPadding = max(18, min(32, base * 0.05))
-      let contentBottomPadding = max(16, min(28, base * 0.048))
-      let sectionSpacing = max(8, min(14, base * 0.026))
-      let gaugeSize = max(118, min(base * 0.38, 164))
+      let contentPadding = max(14, min(26, base * 0.05))
+      let contentTopPadding = max(14, min(24, base * 0.042))
+      let contentBottomPadding = max(14, min(20, base * 0.04))
+      let sectionSpacing = max(8, min(12, base * 0.022))
+      let gaugeSize = max(112, min(base * 0.36, 154))
 
-      ZStack(alignment: .topTrailing) {
-        LinearGradient(
-          colors: [
-            palette.backgroundTop,
-            palette.backgroundBottom,
-          ],
-          startPoint: .topLeading,
-          endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-
+      ZStack {
         RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
           .fill(
             LinearGradient(
               colors: [
-                palette.panelTop.opacity(0.98),
-                palette.panelBottom.opacity(0.98),
+                palette.backgroundTop,
+                palette.backgroundBottom,
               ],
               startPoint: .topLeading,
               endPoint: .bottomTrailing
             )
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
+              .fill(
+                LinearGradient(
+                  colors: [
+                    palette.panelTop.opacity(0.92),
+                    palette.panelBottom.opacity(0.96),
+                  ],
+                  startPoint: .topLeading,
+                  endPoint: .bottomTrailing
+                )
+              )
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
+              .stroke(Color.white.opacity(0.06), lineWidth: 1)
           )
           .shadow(color: Color.black.opacity(0.30), radius: 22 * scale, x: 0, y: 13 * scale)
 
@@ -119,36 +126,22 @@ struct QuotaPanelView: View {
             highlighted: false,
             scale: scale,
             isButton: true,
-            action: openCodexApp
+            isEnabled: model.canConsumeReset,
+            helpText: model.resetButtonHelpText,
+            action: handleResetTap
           )
+
+          HStack {
+            Spacer(minLength: 0)
+            themeButton(palette: palette, scale: scale)
+          }
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentTopPadding)
         .padding(.bottom, contentBottomPadding)
-
-        Button {
-          showingThemeSheet = true
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: "paintpalette.fill")
-            Text(themeStore.selectedPreset.displayName)
-              .lineLimit(1)
-          }
-          .font(.system(size: 11, weight: .heavy, design: .rounded))
-          .foregroundStyle(.white.opacity(0.88))
-          .padding(.vertical, 7)
-          .padding(.horizontal, 10)
-          .background(Color.black.opacity(0.18), in: Capsule())
-          .overlay(
-            Capsule()
-              .stroke(palette.cardStroke.opacity(0.9), lineWidth: 1)
-          )
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 10)
-        .padding(.trailing, 12)
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
+      .clipShape(RoundedRectangle(cornerRadius: panelCorner, style: .continuous))
     }
     .sheet(isPresented: $showingThemeSheet) {
       ThemeSettingsSheet(themeStore: themeStore)
@@ -168,7 +161,7 @@ struct QuotaPanelView: View {
 
       VStack(alignment: .leading, spacing: 3 * scale) {
         Text(model.title)
-          .font(.system(size: 22 * scale, weight: .black, design: .rounded))
+          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
           .foregroundStyle(.white)
           .lineLimit(1)
           .minimumScaleFactor(0.72)
@@ -187,7 +180,7 @@ struct QuotaPanelView: View {
           .font(.system(size: 10 * scale, weight: .heavy, design: .rounded))
           .foregroundStyle(Color.white.opacity(0.72))
         Text(model.planText)
-          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
+          .font(.system(size: 18 * scale, weight: .black, design: .rounded))
           .foregroundStyle(palette.tone)
           .lineLimit(1)
           .minimumScaleFactor(0.66)
@@ -203,9 +196,26 @@ struct QuotaPanelView: View {
     }
   }
 
-  private func openCodexApp() {
-    let appURL = URL(fileURLWithPath: "/Applications/Codex.app")
-    NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
+  private func themeButton(palette: Palette, scale: Double) -> some View {
+    Button {
+      showingThemeSheet = true
+    } label: {
+      Image(systemName: "paintpalette.fill")
+        .font(.system(size: 13 * scale, weight: .black))
+        .foregroundStyle(.white.opacity(0.88))
+        .frame(width: 32 * scale, height: 32 * scale)
+        .background(Color.black.opacity(0.16), in: Circle())
+        .overlay(
+          Circle()
+            .stroke(palette.cardStroke.opacity(0.95), lineWidth: 1)
+        )
+    }
+    .buttonStyle(.plain)
+    .help("打开主题与自定义配色")
+  }
+
+  private func handleResetTap() {
+    Task { await model.consumeResetCredit() }
   }
 }
 
@@ -342,6 +352,8 @@ struct MetricCard: View {
   let highlighted: Bool
   let scale: Double
   var isButton: Bool = false
+  var isEnabled: Bool = true
+  var helpText: String? = nil
   var action: (() -> Void)? = nil
 
   var body: some View {
@@ -370,7 +382,7 @@ struct MetricCard: View {
       }
     }
     .padding(9 * scale)
-    .frame(maxWidth: .infinity, minHeight: 62 * scale, alignment: .leading)
+    .frame(maxWidth: .infinity, minHeight: 58 * scale, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
         .fill(highlighted ? palette.tone.opacity(0.20) : palette.cardBackground)
@@ -385,8 +397,10 @@ struct MetricCard: View {
         card
       }
       .buttonStyle(.plain)
+      .disabled(!isEnabled)
+      .opacity(isEnabled ? 1 : 0.58)
       .contentShape(RoundedRectangle(cornerRadius: 16 * scale, style: .continuous))
-      .help("打开 Codex 以使用官方重置功能")
+      .help(helpText ?? "使用官方重置功能")
     } else {
       card
     }
@@ -400,73 +414,77 @@ struct ThemeSettingsSheet: View {
   var body: some View {
     let custom = themeStore.customColors
 
-    VStack(alignment: .leading, spacing: 16) {
-      HStack {
-        VStack(alignment: .leading, spacing: 4) {
-          Text("主题")
-            .font(.system(size: 22, weight: .black, design: .rounded))
-          Text("4 套内置模板 + 1 套自定义配色")
-            .foregroundStyle(.secondary)
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        HStack {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("主题")
+              .font(.system(size: 22, weight: .black, design: .rounded))
+            Text("4 套内置模板 + 1 套自定义配色")
+              .foregroundStyle(.secondary)
+          }
+          Spacer()
+          Button("完成") { dismiss() }
         }
-        Spacer()
-        Button("完成") { dismiss() }
-      }
 
-      LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-        ForEach(ThemePreset.allCases, id: \.self) { preset in
-          Button {
-            themeStore.select(preset)
-          } label: {
-            HStack {
-              Circle()
-                .fill(themeStore.previewAccent(for: preset))
-                .frame(width: 12, height: 12)
-              Text(preset.displayName)
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-              Spacer()
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+          ForEach(ThemePreset.allCases, id: \.self) { preset in
+            Button {
+              themeStore.select(preset)
+            } label: {
+              HStack {
+                Circle()
+                  .fill(themeStore.previewAccent(for: preset))
+                  .frame(width: 12, height: 12)
+                Text(preset.displayName)
+                  .font(.system(size: 13, weight: .heavy, design: .rounded))
+                Spacer()
+              }
+              .padding(10)
+              .background(Color.white.opacity(themeStore.selectedPreset == preset ? 0.16 : 0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+              .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                  .stroke(themeStore.selectedPreset == preset ? Color.white.opacity(0.5) : Color.white.opacity(0.14), lineWidth: 1)
+              )
             }
-            .padding(10)
-            .background(Color.white.opacity(themeStore.selectedPreset == preset ? 0.16 : 0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-              RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(themeStore.selectedPreset == preset ? Color.white.opacity(0.5) : Color.white.opacity(0.14), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
           }
-          .buttonStyle(.plain)
         }
-      }
 
-      if themeStore.selectedPreset == .custom {
-        VStack(alignment: .leading, spacing: 10) {
-          Text("Custom")
-            .font(.system(size: 16, weight: .black, design: .rounded))
+        if themeStore.selectedPreset == .custom {
+          VStack(alignment: .leading, spacing: 10) {
+            Text("Custom")
+              .font(.system(size: 16, weight: .black, design: .rounded))
 
-          colorPickerRow("背景上层", color: themeStore.binding(for: \.backgroundTop))
-          colorPickerRow("背景下层", color: themeStore.binding(for: \.backgroundBottom))
-          colorPickerRow("面板上层", color: themeStore.binding(for: \.panelTop))
-          colorPickerRow("面板下层", color: themeStore.binding(for: \.panelBottom))
-          colorPickerRow("强调色", color: themeStore.binding(for: \.accent))
-          colorPickerRow("液体上层", color: themeStore.binding(for: \.liquidTop))
-          colorPickerRow("液体中层", color: themeStore.binding(for: \.liquidMid))
-          colorPickerRow("液体下层", color: themeStore.binding(for: \.liquidBottom))
+            colorPickerRow("背景上层", color: themeStore.binding(for: \.backgroundTop))
+            colorPickerRow("背景下层", color: themeStore.binding(for: \.backgroundBottom))
+            colorPickerRow("面板上层", color: themeStore.binding(for: \.panelTop))
+            colorPickerRow("面板下层", color: themeStore.binding(for: \.panelBottom))
+            colorPickerRow("强调色", color: themeStore.binding(for: \.accent))
+            colorPickerRow("液体上层", color: themeStore.binding(for: \.liquidTop))
+            colorPickerRow("液体中层", color: themeStore.binding(for: \.liquidMid))
+            colorPickerRow("液体下层", color: themeStore.binding(for: \.liquidBottom))
 
-          Button("恢复默认 Custom 配色") {
-            themeStore.resetCustomColors()
+            Button("恢复默认 Custom 配色") {
+              themeStore.resetCustomColors()
+            }
+            .buttonStyle(.bordered)
           }
-          .buttonStyle(.bordered)
+        } else {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("当前模板")
+              .font(.system(size: 16, weight: .black, design: .rounded))
+            Text("切到 Custom 后可以分别自定义背景、面板、液体和强调色。")
+              .foregroundStyle(.secondary)
+          }
         }
-      } else {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("当前模板")
-            .font(.system(size: 16, weight: .black, design: .rounded))
-          Text("切到 Custom 后可以分别自定义背景、面板、液体和强调色。")
-            .foregroundStyle(.secondary)
-        }
-      }
 
-      Spacer()
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 28)
+      .padding(.bottom, 20)
     }
-    .padding(20)
     .frame(minWidth: 440, minHeight: 520)
     .background(
       LinearGradient(
@@ -503,6 +521,9 @@ final class QuotaViewModel: ObservableObject {
   @Published var resetLabel = "剩余重置次数"
   @Published var resetCountText = "--"
   @Published var resetAvailableText = "--"
+  @Published var resetButtonHelpText = "读取中"
+  @Published var canConsumeReset = false
+  @Published var isResetting = false
   @Published var stale = false
 
   private let accountId: String
@@ -564,6 +585,29 @@ final class QuotaViewModel: ObservableObject {
     resetLabel = "剩余重置次数"
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
+    canConsumeReset = (snapshot.rateLimitResetCredits?.availableCount ?? 0) > 0 && !isResetting
+    resetButtonHelpText = resetHelpText(snapshot.rateLimitResetCredits)
+  }
+
+  func consumeResetCredit() async {
+    guard canConsumeReset, !isResetting else { return }
+
+    isResetting = true
+    canConsumeReset = false
+    signalText = "正在重置"
+
+    do {
+      _ = try await CodexRateLimitReader(command: codexCommand).consumeResetCredit()
+      try? await Task.sleep(nanoseconds: 350_000_000)
+      isResetting = false
+      await fetchStatus()
+    } catch {
+      isResetting = false
+      stale = true
+      signalText = error.userFacingMessage
+      canConsumeReset = true
+      resetButtonHelpText = "官方重置失败，点击重试"
+    }
   }
 
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
@@ -646,8 +690,15 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func resetAvailability(_ credits: CodexRateLimitResetCredits?) -> String {
+    if isResetting { return "正在使用官方重置" }
     guard let count = credits?.availableCount else { return "官方未提供" }
     return count > 0 ? "当前可立即使用" : "当前暂不可用"
+  }
+
+  private func resetHelpText(_ credits: CodexRateLimitResetCredits?) -> String {
+    if isResetting { return "正在调用官方重置" }
+    guard let count = credits?.availableCount else { return "官方暂未返回重置能力" }
+    return count > 0 ? "点击使用官方重置次数" : "当前没有可用重置次数"
   }
 
   private func titleFromAccount(_ accountId: String) -> String {
@@ -757,6 +808,10 @@ struct CodexRateLimitWindow: Decodable {
 
 struct CodexRateLimitResetCredits: Decodable {
   let availableCount: Int?
+}
+
+struct CodexResetOutcome: Decodable {
+  let outcome: String?
 }
 
 enum ThemePreset: String, CaseIterable {
@@ -946,6 +1001,22 @@ final class CodexRateLimitReader {
   }
 
   func read() async throws -> CodexRateLimitEnvelope {
+    try await perform(method: "account/rateLimits/read", params: [:], as: CodexRateLimitEnvelope.self)
+  }
+
+  func consumeResetCredit() async throws -> CodexResetOutcome {
+    try await perform(
+      method: "account/rateLimitResetCredit/consume",
+      params: ["idempotencyKey": UUID().uuidString],
+      as: CodexResetOutcome.self
+    )
+  }
+
+  private func perform<Result: Decodable>(
+    method: String,
+    params: [String: Any],
+    as type: Result.Type
+  ) async throws -> Result {
     let command = command
     let timeout = timeout
 
@@ -996,7 +1067,7 @@ final class CodexRateLimitReader {
           ])
 
           var buffer = ""
-          var sentRead = false
+          var sentRequest = false
 
           while true {
             let data = outputPipe.fileHandleForReading.availableData
@@ -1019,9 +1090,9 @@ final class CodexRateLimitReader {
                 continue
               }
 
-              if id == 1, !sentRead {
-                sentRead = true
-                try send(["id": 2, "method": "account/rateLimits/read"])
+              if id == 1, !sentRequest {
+                sentRequest = true
+                try send(["id": 2, "method": method, "params": params])
                 continue
               }
 
@@ -1033,7 +1104,7 @@ final class CodexRateLimitReader {
                   throw FetchError.missingRateLimits
                 }
                 let data = try JSONSerialization.data(withJSONObject: result)
-                let decoded = try JSONDecoder().decode(CodexRateLimitEnvelope.self, from: data)
+                let decoded = try JSONDecoder().decode(Result.self, from: data)
                 if process.isRunning {
                   process.terminate()
                 }
