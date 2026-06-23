@@ -109,14 +109,12 @@ struct QuotaPanelView: View {
             )
           }
 
-          MetricCard(
+          ResetActionCard(
             label: model.resetLabel,
             percent: model.resetCountText,
-            reset: model.resetAvailableText,
+            status: model.resetAvailableText,
             palette: palette,
-            highlighted: false,
             scale: scale,
-            isButton: true,
             isEnabled: model.canConsumeReset,
             helpText: model.resetButtonHelpText,
             action: handleResetTap
@@ -134,6 +132,7 @@ struct QuotaPanelView: View {
       .frame(width: proxy.size.width, height: proxy.size.height)
       .clipShape(RoundedRectangle(cornerRadius: panelCorner, style: .continuous))
     }
+    .ignoresSafeArea()
     .sheet(isPresented: $showingThemeSheet) {
       ThemeSettingsSheet(themeStore: themeStore)
     }
@@ -179,24 +178,16 @@ struct QuotaPanelView: View {
 
       Spacer(minLength: 6 * scale)
 
-      VStack(spacing: 3 * scale) {
+      VStack(alignment: .trailing, spacing: 2 * scale) {
         Text("计划")
-          .font(.system(size: 9 * scale, weight: .semibold))
-          .foregroundStyle(Color.white.opacity(0.55))
+          .font(.system(size: 9 * scale, weight: .medium))
+          .foregroundStyle(Color.white.opacity(0.45))
         Text(model.planText)
-          .font(.system(size: 16 * scale, weight: .bold))
+          .font(.system(size: 17 * scale, weight: .bold))
           .foregroundStyle(palette.tone)
           .lineLimit(1)
           .minimumScaleFactor(0.66)
       }
-      .frame(minWidth: 68 * scale)
-      .padding(.vertical, 8 * scale)
-      .padding(.horizontal, 11 * scale)
-      .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
-          .stroke(palette.tone.opacity(0.34), lineWidth: 1)
-      )
     }
   }
 
@@ -424,6 +415,87 @@ struct MetricCard: View {
       startPoint: .topLeading,
       endPoint: .bottomTrailing
     )
+  }
+}
+
+struct ResetActionCard: View {
+  let label: String
+  let percent: String
+  let status: String
+  let palette: Palette
+  let scale: Double
+  let isEnabled: Bool
+  let helpText: String?
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 10 * scale) {
+        VStack(alignment: .leading, spacing: 8 * scale) {
+          Text(label)
+            .font(.system(size: 12 * scale, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.58))
+            .lineLimit(1)
+
+          Text(percent)
+            .font(.system(size: 18 * scale, weight: .bold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+
+          Text(status)
+            .font(.system(size: 14 * scale, weight: .semibold))
+            .foregroundStyle(isEnabled ? palette.tone : Color.white.opacity(0.44))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+        }
+
+        Spacer(minLength: 0)
+
+        VStack(spacing: 7 * scale) {
+          Image(systemName: isEnabled ? "arrow.clockwise.circle.fill" : "minus.circle")
+            .font(.system(size: 24 * scale, weight: .semibold))
+            .foregroundStyle(isEnabled ? palette.tone : Color.white.opacity(0.30))
+
+          Text(isEnabled ? "立即重置" : "暂无次数")
+            .font(.system(size: 11 * scale, weight: .bold))
+            .foregroundStyle(isEnabled ? Color.black.opacity(0.78) : Color.white.opacity(0.45))
+            .padding(.vertical, 6 * scale)
+            .padding(.horizontal, 10 * scale)
+            .background(
+              Capsule(style: .continuous)
+                .fill(isEnabled ? palette.tone : Color.white.opacity(0.06))
+            )
+        }
+      }
+      .padding(.horizontal, 12 * scale)
+      .padding(.vertical, 12 * scale)
+      .frame(maxWidth: .infinity, minHeight: 74 * scale, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 18 * scale, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: isEnabled ? [
+                palette.tone.opacity(0.18),
+                palette.cardBackground.opacity(0.94),
+              ] : [
+                palette.cardBackground,
+                palette.cardBackground.opacity(0.82),
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 18 * scale, style: .continuous)
+          .stroke(isEnabled ? palette.tone.opacity(0.34) : Color.white.opacity(0.08), lineWidth: 1)
+      )
+    }
+    .buttonStyle(.plain)
+    .disabled(!isEnabled)
+    .opacity(isEnabled ? 1 : 0.9)
+    .contentShape(RoundedRectangle(cornerRadius: 18 * scale, style: .continuous))
+    .help(helpText ?? "使用官方重置功能")
   }
 }
 
