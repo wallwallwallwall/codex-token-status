@@ -24,13 +24,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       window.title = "Quota Status"
       window.setContentSize(NSSize(width: 360, height: 360))
       window.minSize = NSSize(width: 280, height: 280)
+      window.styleMask.insert(.fullSizeContentView)
       window.contentAspectRatio = NSSize(width: 1, height: 1)
       window.center()
       window.titlebarAppearsTransparent = true
+      window.titlebarSeparatorStyle = .none
       window.titleVisibility = .hidden
       window.isMovableByWindowBackground = true
-      window.backgroundColor = NSColor(red: 0.02, green: 0.08, blue: 0.10, alpha: 1)
-      window.isOpaque = true
+      window.backgroundColor = .clear
+      window.isOpaque = false
       window.standardWindowButton(.closeButton)?.isHidden = true
       window.standardWindowButton(.miniaturizeButton)?.isHidden = true
       window.standardWindowButton(.zoomButton)?.isHidden = true
@@ -40,9 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct QuotaPanelView: View {
   @StateObject private var model = QuotaViewModel()
+  @StateObject private var themeStore = ThemeStore()
+  @State private var showingThemeSheet = false
 
   var body: some View {
-    let palette = Palette.forPercent(model.stale ? 0 : model.primaryPercent)
+    let palette = themeStore.palette(for: model.stale ? 0 : model.primaryPercent)
 
     GeometryReader { proxy in
       let base = min(proxy.size.width, proxy.size.height)
@@ -54,12 +58,11 @@ struct QuotaPanelView: View {
       let sectionSpacing = max(8, min(14, base * 0.026))
       let gaugeSize = max(118, min(base * 0.38, 164))
 
-      ZStack {
+      ZStack(alignment: .topTrailing) {
         LinearGradient(
           colors: [
-            Color(red: 0.04, green: 0.24, blue: 0.23),
-            Color(red: 0.03, green: 0.13, blue: 0.16),
-            Color(red: 0.02, green: 0.08, blue: 0.12),
+            palette.backgroundTop,
+            palette.backgroundBottom,
           ],
           startPoint: .topLeading,
           endPoint: .bottomTrailing
@@ -70,8 +73,8 @@ struct QuotaPanelView: View {
           .fill(
             LinearGradient(
               colors: [
-                Color(red: 0.08, green: 0.18, blue: 0.22).opacity(0.98),
-                Color(red: 0.04, green: 0.10, blue: 0.14).opacity(0.98),
+                palette.panelTop.opacity(0.98),
+                palette.panelBottom.opacity(0.98),
               ],
               startPoint: .topLeading,
               endPoint: .bottomTrailing
@@ -114,14 +117,41 @@ struct QuotaPanelView: View {
             reset: model.resetAvailableText,
             palette: palette,
             highlighted: false,
-            scale: scale
+            scale: scale,
+            isButton: true,
+            action: openCodexApp
           )
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentTopPadding)
         .padding(.bottom, contentBottomPadding)
+
+        Button {
+          showingThemeSheet = true
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "paintpalette.fill")
+            Text(themeStore.selectedPreset.displayName)
+              .lineLimit(1)
+          }
+          .font(.system(size: 11, weight: .heavy, design: .rounded))
+          .foregroundStyle(.white.opacity(0.88))
+          .padding(.vertical, 7)
+          .padding(.horizontal, 10)
+          .background(Color.black.opacity(0.18), in: Capsule())
+          .overlay(
+            Capsule()
+              .stroke(palette.cardStroke.opacity(0.9), lineWidth: 1)
+          )
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 10)
+        .padding(.trailing, 12)
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
+    }
+    .sheet(isPresented: $showingThemeSheet) {
+      ThemeSettingsSheet(themeStore: themeStore)
     }
   }
 
@@ -171,6 +201,11 @@ struct QuotaPanelView: View {
           .stroke(palette.tone.opacity(0.55), lineWidth: 1)
       )
     }
+  }
+
+  private func openCodexApp() {
+    let appURL = URL(fileURLWithPath: "/Applications/Codex.app")
+    NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration())
   }
 }
 
@@ -306,9 +341,11 @@ struct MetricCard: View {
   let palette: Palette
   let highlighted: Bool
   let scale: Double
+  var isButton: Bool = false
+  var action: (() -> Void)? = nil
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 7 * scale) {
+    let card = VStack(alignment: .leading, spacing: 7 * scale) {
       Text(label)
         .font(.system(size: 13 * scale, weight: .black, design: .rounded))
         .foregroundStyle(Color.white.opacity(0.68))
@@ -336,12 +373,118 @@ struct MetricCard: View {
     .frame(maxWidth: .infinity, minHeight: 62 * scale, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
-        .fill(highlighted ? palette.tone.opacity(0.20) : Color.white.opacity(0.08))
+        .fill(highlighted ? palette.tone.opacity(0.20) : palette.cardBackground)
     )
     .overlay(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
-        .stroke(highlighted ? palette.tone.opacity(0.56) : Color.white.opacity(0.16), lineWidth: 1)
+        .stroke(highlighted ? palette.tone.opacity(0.56) : palette.cardStroke, lineWidth: 1)
     )
+
+    if isButton, let action {
+      Button(action: action) {
+        card
+      }
+      .buttonStyle(.plain)
+      .contentShape(RoundedRectangle(cornerRadius: 16 * scale, style: .continuous))
+      .help("打开 Codex 以使用官方重置功能")
+    } else {
+      card
+    }
+  }
+}
+
+struct ThemeSettingsSheet: View {
+  @ObservedObject var themeStore: ThemeStore
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    let custom = themeStore.customColors
+
+    VStack(alignment: .leading, spacing: 16) {
+      HStack {
+        VStack(alignment: .leading, spacing: 4) {
+          Text("主题")
+            .font(.system(size: 22, weight: .black, design: .rounded))
+          Text("4 套内置模板 + 1 套自定义配色")
+            .foregroundStyle(.secondary)
+        }
+        Spacer()
+        Button("完成") { dismiss() }
+      }
+
+      LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+        ForEach(ThemePreset.allCases, id: \.self) { preset in
+          Button {
+            themeStore.select(preset)
+          } label: {
+            HStack {
+              Circle()
+                .fill(themeStore.previewAccent(for: preset))
+                .frame(width: 12, height: 12)
+              Text(preset.displayName)
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+              Spacer()
+            }
+            .padding(10)
+            .background(Color.white.opacity(themeStore.selectedPreset == preset ? 0.16 : 0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+              RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(themeStore.selectedPreset == preset ? Color.white.opacity(0.5) : Color.white.opacity(0.14), lineWidth: 1)
+            )
+          }
+          .buttonStyle(.plain)
+        }
+      }
+
+      if themeStore.selectedPreset == .custom {
+        VStack(alignment: .leading, spacing: 10) {
+          Text("Custom")
+            .font(.system(size: 16, weight: .black, design: .rounded))
+
+          colorPickerRow("背景上层", color: themeStore.binding(for: \.backgroundTop))
+          colorPickerRow("背景下层", color: themeStore.binding(for: \.backgroundBottom))
+          colorPickerRow("面板上层", color: themeStore.binding(for: \.panelTop))
+          colorPickerRow("面板下层", color: themeStore.binding(for: \.panelBottom))
+          colorPickerRow("强调色", color: themeStore.binding(for: \.accent))
+          colorPickerRow("液体上层", color: themeStore.binding(for: \.liquidTop))
+          colorPickerRow("液体中层", color: themeStore.binding(for: \.liquidMid))
+          colorPickerRow("液体下层", color: themeStore.binding(for: \.liquidBottom))
+
+          Button("恢复默认 Custom 配色") {
+            themeStore.resetCustomColors()
+          }
+          .buttonStyle(.bordered)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("当前模板")
+            .font(.system(size: 16, weight: .black, design: .rounded))
+          Text("切到 Custom 后可以分别自定义背景、面板、液体和强调色。")
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      Spacer()
+    }
+    .padding(20)
+    .frame(minWidth: 440, minHeight: 520)
+    .background(
+      LinearGradient(
+        colors: [custom.backgroundTop.opacity(0.20), custom.backgroundBottom.opacity(0.08)],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+    )
+  }
+
+  private func colorPickerRow(_ title: String, color: Binding<Color>) -> some View {
+    HStack {
+      Text(title)
+        .font(.system(size: 13, weight: .heavy, design: .rounded))
+      Spacer()
+      ColorPicker(title, selection: color, supportsOpacity: false)
+        .labelsHidden()
+    }
   }
 }
 
@@ -616,6 +759,183 @@ struct CodexRateLimitResetCredits: Decodable {
   let availableCount: Int?
 }
 
+enum ThemePreset: String, CaseIterable {
+  case amberCurrent
+  case glacierMint
+  case graphiteRose
+  case forestNeon
+  case custom
+
+  var displayName: String {
+    switch self {
+    case .amberCurrent: return "Amber Current"
+    case .glacierMint: return "Glacier Mint"
+    case .graphiteRose: return "Graphite Rose"
+    case .forestNeon: return "Forest Neon"
+    case .custom: return "Custom"
+    }
+  }
+}
+
+struct CustomThemeColors {
+  var backgroundTop: Color
+  var backgroundBottom: Color
+  var panelTop: Color
+  var panelBottom: Color
+  var accent: Color
+  var liquidTop: Color
+  var liquidMid: Color
+  var liquidBottom: Color
+
+  static let `default` = CustomThemeColors(
+    backgroundTop: Color(hex: "#103642"),
+    backgroundBottom: Color(hex: "#071720"),
+    panelTop: Color(hex: "#173644"),
+    panelBottom: Color(hex: "#0c202a"),
+    accent: Color(hex: "#ffbf61"),
+    liquidTop: Color(hex: "#ffd9a2"),
+    liquidMid: Color(hex: "#ffb560"),
+    liquidBottom: Color(hex: "#e28934")
+  )
+}
+
+@MainActor
+final class ThemeStore: ObservableObject {
+  @Published var selectedPreset: ThemePreset
+  @Published var customColors: CustomThemeColors
+
+  private let defaults = UserDefaults.standard
+  private let presetKey = "QuotaStatus.themePreset"
+  private let customPrefix = "QuotaStatus.customTheme."
+
+  init() {
+    let raw = defaults.string(forKey: presetKey) ?? ThemePreset.amberCurrent.rawValue
+    selectedPreset = ThemePreset(rawValue: raw) ?? .amberCurrent
+    customColors = Self.loadCustomColors(defaults: defaults)
+  }
+
+  func select(_ preset: ThemePreset) {
+    selectedPreset = preset
+    defaults.set(preset.rawValue, forKey: presetKey)
+  }
+
+  func previewAccent(for preset: ThemePreset) -> Color {
+    palette(for: 60, presetOverride: preset).tone
+  }
+
+  func resetCustomColors() {
+    customColors = .default
+    persistCustomColors()
+  }
+
+  func binding(for keyPath: WritableKeyPath<CustomThemeColors, Color>) -> Binding<Color> {
+    Binding(
+      get: { self.customColors[keyPath: keyPath] },
+      set: { newValue in
+        self.customColors[keyPath: keyPath] = newValue
+        self.persistCustomColors()
+      }
+    )
+  }
+
+  func palette(for percent: Int, presetOverride: ThemePreset? = nil) -> Palette {
+    let preset = presetOverride ?? selectedPreset
+    switch preset {
+    case .amberCurrent:
+      return Palette(
+        backgroundTop: Color(hex: "#0c3d3b"),
+        backgroundBottom: Color(hex: "#071620"),
+        panelTop: Color(hex: "#143241"),
+        panelBottom: Color(hex: "#0b1e28"),
+        cardBackground: Color.white.opacity(0.08),
+        cardStroke: Color.white.opacity(0.16),
+        tone: Palette.accentColor(for: percent, low: RGB(255, 113, 111), mid: RGB(255, 199, 106), high: RGB(67, 228, 141)),
+        liquidTop: Color(hex: "#ffd9a2"),
+        liquidMid: Color(hex: "#ffb560"),
+        liquidBottom: Color(hex: "#e28934")
+      )
+    case .glacierMint:
+      return Palette(
+        backgroundTop: Color(hex: "#123440"),
+        backgroundBottom: Color(hex: "#08141c"),
+        panelTop: Color(hex: "#17303c"),
+        panelBottom: Color(hex: "#0c1820"),
+        cardBackground: Color(hex: "#d7f6ff").opacity(0.09),
+        cardStroke: Color(hex: "#d7f6ff").opacity(0.18),
+        tone: Palette.accentColor(for: percent, low: RGB(122, 174, 255), mid: RGB(121, 240, 214), high: RGB(171, 255, 205)),
+        liquidTop: Color(hex: "#baf7ff"),
+        liquidMid: Color(hex: "#78dfd1"),
+        liquidBottom: Color(hex: "#3faea3")
+      )
+    case .graphiteRose:
+      return Palette(
+        backgroundTop: Color(hex: "#221d26"),
+        backgroundBottom: Color(hex: "#0b0d14"),
+        panelTop: Color(hex: "#2a2630"),
+        panelBottom: Color(hex: "#131721"),
+        cardBackground: Color(hex: "#f5dbe7").opacity(0.09),
+        cardStroke: Color(hex: "#f5dbe7").opacity(0.18),
+        tone: Palette.accentColor(for: percent, low: RGB(255, 144, 144), mid: RGB(244, 176, 138), high: RGB(234, 196, 172)),
+        liquidTop: Color(hex: "#ffd8df"),
+        liquidMid: Color(hex: "#d9a0a7"),
+        liquidBottom: Color(hex: "#8b626f")
+      )
+    case .forestNeon:
+      return Palette(
+        backgroundTop: Color(hex: "#0a2f24"),
+        backgroundBottom: Color(hex: "#07120f"),
+        panelTop: Color(hex: "#113027"),
+        panelBottom: Color(hex: "#0a1d18"),
+        cardBackground: Color(hex: "#dfff8d").opacity(0.08),
+        cardStroke: Color(hex: "#dfff8d").opacity(0.18),
+        tone: Palette.accentColor(for: percent, low: RGB(255, 141, 84), mid: RGB(208, 255, 120), high: RGB(89, 255, 176)),
+        liquidTop: Color(hex: "#d6ff8f"),
+        liquidMid: Color(hex: "#7df38a"),
+        liquidBottom: Color(hex: "#22c98b")
+      )
+    case .custom:
+      return Palette(
+        backgroundTop: customColors.backgroundTop,
+        backgroundBottom: customColors.backgroundBottom,
+        panelTop: customColors.panelTop,
+        panelBottom: customColors.panelBottom,
+        cardBackground: Color.white.opacity(0.08),
+        cardStroke: customColors.accent.opacity(0.35),
+        tone: customColors.accent,
+        liquidTop: customColors.liquidTop,
+        liquidMid: customColors.liquidMid,
+        liquidBottom: customColors.liquidBottom
+      )
+    }
+  }
+
+  private func persistCustomColors() {
+    defaults.set(selectedPreset.rawValue, forKey: presetKey)
+    defaults.set(customColors.backgroundTop.hexString, forKey: customPrefix + "backgroundTop")
+    defaults.set(customColors.backgroundBottom.hexString, forKey: customPrefix + "backgroundBottom")
+    defaults.set(customColors.panelTop.hexString, forKey: customPrefix + "panelTop")
+    defaults.set(customColors.panelBottom.hexString, forKey: customPrefix + "panelBottom")
+    defaults.set(customColors.accent.hexString, forKey: customPrefix + "accent")
+    defaults.set(customColors.liquidTop.hexString, forKey: customPrefix + "liquidTop")
+    defaults.set(customColors.liquidMid.hexString, forKey: customPrefix + "liquidMid")
+    defaults.set(customColors.liquidBottom.hexString, forKey: customPrefix + "liquidBottom")
+  }
+
+  private static func loadCustomColors(defaults: UserDefaults) -> CustomThemeColors {
+    let fallback = CustomThemeColors.default
+    return CustomThemeColors(
+      backgroundTop: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.backgroundTop") ?? fallback.backgroundTop.hexString),
+      backgroundBottom: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.backgroundBottom") ?? fallback.backgroundBottom.hexString),
+      panelTop: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.panelTop") ?? fallback.panelTop.hexString),
+      panelBottom: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.panelBottom") ?? fallback.panelBottom.hexString),
+      accent: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.accent") ?? fallback.accent.hexString),
+      liquidTop: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.liquidTop") ?? fallback.liquidTop.hexString),
+      liquidMid: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.liquidMid") ?? fallback.liquidMid.hexString),
+      liquidBottom: Color(hex: defaults.string(forKey: "QuotaStatus.customTheme.liquidBottom") ?? fallback.liquidBottom.hexString)
+    )
+  }
+}
+
 final class CodexRateLimitReader {
   private let command: String
   private let timeout: TimeInterval
@@ -744,53 +1064,31 @@ final class CodexRateLimitReader {
 }
 
 struct Palette {
+  let backgroundTop: Color
+  let backgroundBottom: Color
+  let panelTop: Color
+  let panelBottom: Color
+  let cardBackground: Color
+  let cardStroke: Color
   let tone: Color
   let liquidTop: Color
   let liquidMid: Color
   let liquidBottom: Color
 
-  static func forPercent(_ percent: Int) -> Palette {
+  static func accentColor(for percent: Int, low: RGB, mid: RGB, high: RGB) -> Color {
     let value = max(0, min(100, Double(percent)))
-    let low = PaletteStop(
-      percent: 0,
-      tone: RGB(255, 113, 111),
-      top: RGB(255, 196, 191),
-      mid: RGB(255, 138, 125),
-      bottom: RGB(217, 75, 94)
-    )
-    let mid = PaletteStop(
-      percent: 50,
-      tone: RGB(255, 199, 106),
-      top: RGB(255, 231, 173),
-      mid: RGB(255, 189, 106),
-      bottom: RGB(223, 143, 57)
-    )
-    let high = PaletteStop(
-      percent: 100,
-      tone: RGB(67, 228, 141),
-      top: RGB(150, 255, 203),
-      mid: RGB(40, 198, 240),
-      bottom: RGB(24, 141, 232)
-    )
-
-    let range = value <= 50 ? (low, mid) : (mid, high)
-    let t = (value - range.0.percent) / (range.1.percent - range.0.percent)
-
-    return Palette(
-      tone: RGB.mix(range.0.tone, range.1.tone, t).color,
-      liquidTop: RGB.mix(range.0.top, range.1.top, t).color,
-      liquidMid: RGB.mix(range.0.mid, range.1.mid, t).color,
-      liquidBottom: RGB.mix(range.0.bottom, range.1.bottom, t).color
-    )
+    let lowStop = PaletteStop(percent: 0, tone: low)
+    let midStop = PaletteStop(percent: 50, tone: mid)
+    let highStop = PaletteStop(percent: 100, tone: high)
+    let range = value <= 50 ? (lowStop, midStop) : (midStop, highStop)
+    let amount = (value - range.0.percent) / (range.1.percent - range.0.percent)
+    return RGB.mix(range.0.tone, range.1.tone, amount).color
   }
 }
 
 struct PaletteStop {
   let percent: Double
   let tone: RGB
-  let top: RGB
-  let mid: RGB
-  let bottom: RGB
 }
 
 struct RGB {
@@ -815,6 +1113,26 @@ struct RGB {
       start.green + (end.green - start.green) * clamped,
       start.blue + (end.blue - start.blue) * clamped
     )
+  }
+}
+
+extension Color {
+  init(hex: String) {
+    let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+    var int: UInt64 = 0
+    Scanner(string: hex).scanHexInt64(&int)
+    let red = Double((int >> 16) & 0xFF) / 255
+    let green = Double((int >> 8) & 0xFF) / 255
+    let blue = Double(int & 0xFF) / 255
+    self.init(red: red, green: green, blue: blue)
+  }
+
+  var hexString: String {
+    let color = NSColor(self).usingColorSpace(.deviceRGB) ?? .black
+    let red = Int(round(color.redComponent * 255))
+    let green = Int(round(color.greenComponent * 255))
+    let blue = Int(round(color.blueComponent * 255))
+    return String(format: "#%02X%02X%02X", red, green, blue)
   }
 }
 
