@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 import SwiftUI
 
@@ -15,9 +16,14 @@ struct QuotaStatusApp: App {
   }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private var statusItem: NSStatusItem?
+  private var cancellables = Set<AnyCancellable>()
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
+    configureStatusItem()
 
     DispatchQueue.main.async {
       guard let window = NSApp.windows.first else { return }
@@ -38,10 +44,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       window.standardWindowButton(.zoomButton)?.isHidden = true
     }
   }
+
+  private func configureStatusItem() {
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    item.button?.title = QuotaViewModel.shared.statusBarTitle
+    item.button?.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+    item.button?.target = self
+    item.button?.action = #selector(showMainWindow)
+    statusItem = item
+
+    QuotaViewModel.shared.$statusBarTitle
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] title in
+        self?.statusItem?.button?.title = title
+      }
+      .store(in: &cancellables)
+  }
+
+  @objc private func showMainWindow() {
+    NSApp.activate(ignoringOtherApps: true)
+    NSApp.windows.first?.makeKeyAndOrderFront(nil)
+  }
 }
 
 struct QuotaPanelView: View {
-  @StateObject private var model = QuotaViewModel()
+  @ObservedObject private var model = QuotaViewModel.shared
   @StateObject private var themeStore = ThemeStore()
   @State private var showingThemeSheet = false
 
@@ -360,20 +387,14 @@ struct MetricCard: View {
         .minimumScaleFactor(0.72)
 
       HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
-        Text(percent)
-          .font(.system(size: 18 * scale, weight: .bold))
-          .foregroundStyle(.white)
-          .monospacedDigit()
-          .lineLimit(1)
-          .minimumScaleFactor(0.72)
-
+        percentView
         Spacer(minLength: 2 * scale)
-
         Text(reset)
           .font(.system(size: 15 * scale, weight: .semibold))
           .foregroundStyle(Color.white.opacity(0.52))
           .lineLimit(1)
           .minimumScaleFactor(0.64)
+          .fixedSize(horizontal: true, vertical: false)
       }
     }
     .padding(.horizontal, 12 * scale)
@@ -414,6 +435,17 @@ struct MetricCard: View {
       startPoint: .topLeading,
       endPoint: .bottomTrailing
     )
+  }
+
+  private var percentView: some View {
+    Text(percent)
+      .font(.system(size: 18 * scale, weight: .bold))
+      .foregroundStyle(.white)
+      .monospacedDigit()
+      .lineLimit(1)
+      .minimumScaleFactor(0.72)
+      .layoutPriority(1)
+      .fixedSize(horizontal: true, vertical: false)
   }
 }
 
@@ -599,6 +631,8 @@ struct ThemeSettingsSheet: View {
 
 @MainActor
 final class QuotaViewModel: ObservableObject {
+  static let shared = QuotaViewModel()
+
   @Published var title = "Mac Codex"
   @Published var signalText = "读取中"
   @Published var planText = "--"
@@ -616,6 +650,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var canConsumeReset = false
   @Published var isResetting = false
   @Published var stale = false
+  @Published var statusBarTitle = "Codex --|--"
 
   private let accountId: String
   private let codexCommand: String
@@ -673,6 +708,7 @@ final class QuotaViewModel: ObservableObject {
     weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
+    statusBarTitle = "Codex \(shortPercentText)|\(weeklyPercentText)"
     resetLabel = "剩余重置次数"
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
