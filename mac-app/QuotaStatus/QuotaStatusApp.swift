@@ -54,8 +54,8 @@ struct QuotaPanelView: View {
       let panelCorner = max(18, min(30, base * 0.058))
       let contentPadding = max(16, min(28, base * 0.052))
       let contentTopPadding = max(16, min(24, base * 0.044))
-      let contentBottomPadding = max(14, min(22, base * 0.042))
-      let sectionSpacing = max(10, min(14, base * 0.024))
+      let contentBottomPadding = max(12, min(18, base * 0.036))
+      let sectionSpacing = max(8, min(12, base * 0.02))
       let gaugeSize = max(108, min(base * 0.36, 148))
 
       ZStack {
@@ -119,11 +119,6 @@ struct QuotaPanelView: View {
             helpText: model.resetButtonHelpText,
             action: handleResetTap
           )
-
-          HStack {
-            Spacer(minLength: 0)
-            themeButton(palette: palette, scale: scale)
-          }
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentTopPadding)
@@ -178,15 +173,19 @@ struct QuotaPanelView: View {
 
       Spacer(minLength: 6 * scale)
 
-      VStack(alignment: .trailing, spacing: 2 * scale) {
-        Text("计划")
-          .font(.system(size: 9 * scale, weight: .medium))
-          .foregroundStyle(Color.white.opacity(0.45))
-        Text(model.planText)
-          .font(.system(size: 17 * scale, weight: .bold))
-          .foregroundStyle(palette.tone)
-          .lineLimit(1)
-          .minimumScaleFactor(0.66)
+      HStack(spacing: 8 * scale) {
+        VStack(alignment: .trailing, spacing: 2 * scale) {
+          Text("计划")
+            .font(.system(size: 9 * scale, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.45))
+          Text(model.planText)
+            .font(.system(size: 17 * scale, weight: .bold))
+            .foregroundStyle(palette.tone)
+            .lineLimit(1)
+            .minimumScaleFactor(0.66)
+        }
+
+        themeButton(palette: palette, scale: scale)
       }
     }
   }
@@ -198,7 +197,7 @@ struct QuotaPanelView: View {
       Image(systemName: "slider.horizontal.3")
         .font(.system(size: 12 * scale, weight: .bold))
         .foregroundStyle(.white.opacity(0.88))
-        .frame(width: 30 * scale, height: 30 * scale)
+        .frame(width: 26 * scale, height: 26 * scale)
         .background(Color.white.opacity(0.05), in: Circle())
         .overlay(
           Circle()
