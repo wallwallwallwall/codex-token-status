@@ -47,8 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func configureStatusItem() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    item.button?.title = QuotaViewModel.shared.statusBarTitle
-    item.button?.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+    renderStatusTitle(QuotaViewModel.shared.statusBarTitle, on: item)
     item.button?.target = self
     item.button?.action = #selector(showMainWindow)
     statusItem = item
@@ -56,9 +55,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     QuotaViewModel.shared.$statusBarTitle
       .receive(on: DispatchQueue.main)
       .sink { [weak self] title in
-        self?.statusItem?.button?.title = title
+        guard let item = self?.statusItem else { return }
+        self?.renderStatusTitle(title, on: item)
       }
       .store(in: &cancellables)
+  }
+
+  private func renderStatusTitle(_ title: String, on item: NSStatusItem) {
+    let paragraphStyle = NSMutableParagraphStyle()
+    paragraphStyle.lineBreakMode = .byClipping
+    paragraphStyle.alignment = .center
+
+    item.length = max(118, CGFloat(title.count) * 8.2)
+    item.button?.attributedTitle = NSAttributedString(
+      string: title,
+      attributes: [
+        .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .bold),
+        .foregroundColor: NSColor.labelColor,
+        .paragraphStyle: paragraphStyle,
+      ]
+    )
   }
 
   @objc private func showMainWindow() {
@@ -670,7 +686,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var canConsumeReset = false
   @Published var isResetting = false
   @Published var stale = false
-  @Published var statusBarTitle = "Codex --|--"
+  @Published var statusBarTitle = "CodeX\u{00A0}--|--"
 
   private let accountId: String
   private let codexCommand: String
@@ -728,7 +744,7 @@ final class QuotaViewModel: ObservableObject {
     weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
-    statusBarTitle = "Codex \(shortPercentText)|\(weeklyPercentText)"
+    statusBarTitle = "CodeX\u{00A0}\(shortPercentText)|\(weeklyPercentText)"
     resetLabel = "剩余重置次数"
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
