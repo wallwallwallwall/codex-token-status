@@ -48,10 +48,11 @@ struct QuotaPanelView: View {
       let base = min(proxy.size.width, proxy.size.height)
       let scale = max(0.78, min(1.65, base / 360))
       let panelCorner = max(18, min(30, base * 0.058))
-      let contentPadding = max(18, min(40, base * 0.068))
-      let contentTopPadding = max(22, min(42, base * 0.074))
-      let contentBottomPadding = max(18, min(36, base * 0.064))
-      let gaugeSize = max(132, min(base * 0.47, base - contentTopPadding - contentBottomPadding - 132 * scale))
+      let contentPadding = max(16, min(34, base * 0.056))
+      let contentTopPadding = max(18, min(32, base * 0.05))
+      let contentBottomPadding = max(16, min(28, base * 0.048))
+      let sectionSpacing = max(8, min(14, base * 0.026))
+      let gaugeSize = max(118, min(base * 0.38, 164))
 
       ZStack {
         LinearGradient(
@@ -78,18 +79,14 @@ struct QuotaPanelView: View {
           )
           .shadow(color: Color.black.opacity(0.30), radius: 22 * scale, x: 0, y: 13 * scale)
 
-        VStack(spacing: 12 * scale) {
+        VStack(spacing: sectionSpacing) {
           header(palette: palette, scale: scale)
-
-          Spacer(minLength: 0)
 
           LiquidGauge(
             percent: model.primaryPercent,
             palette: palette
           )
           .frame(width: gaugeSize, height: gaugeSize)
-
-          Spacer(minLength: 0)
 
           HStack(spacing: 10 * scale) {
             MetricCard(
@@ -335,8 +332,8 @@ struct MetricCard: View {
           .minimumScaleFactor(0.64)
       }
     }
-    .padding(10 * scale)
-    .frame(maxWidth: .infinity, minHeight: 72 * scale, alignment: .leading)
+    .padding(9 * scale)
+    .frame(maxWidth: .infinity, minHeight: 62 * scale, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
         .fill(highlighted ? palette.tone.opacity(0.20) : Color.white.opacity(0.08))
