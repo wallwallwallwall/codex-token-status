@@ -52,31 +52,22 @@ struct QuotaPanelView: View {
       let base = min(proxy.size.width, proxy.size.height)
       let scale = max(0.78, min(1.65, base / 360))
       let panelCorner = max(18, min(30, base * 0.058))
-      let contentPadding = max(14, min(26, base * 0.05))
-      let contentTopPadding = max(14, min(24, base * 0.042))
-      let contentBottomPadding = max(14, min(20, base * 0.04))
-      let sectionSpacing = max(8, min(12, base * 0.022))
-      let gaugeSize = max(112, min(base * 0.36, 154))
+      let contentPadding = max(16, min(28, base * 0.052))
+      let contentTopPadding = max(16, min(24, base * 0.044))
+      let contentBottomPadding = max(14, min(22, base * 0.042))
+      let sectionSpacing = max(10, min(14, base * 0.024))
+      let gaugeSize = max(108, min(base * 0.36, 148))
 
       ZStack {
         RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
-          .fill(
-            LinearGradient(
-              colors: [
-                palette.backgroundTop,
-                palette.backgroundBottom,
-              ],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
-            )
-          )
+          .fill(glassPanelFill(palette: palette))
           .overlay(
             RoundedRectangle(cornerRadius: panelCorner, style: .continuous)
               .fill(
                 LinearGradient(
                   colors: [
-                    palette.panelTop.opacity(0.92),
-                    palette.panelBottom.opacity(0.96),
+                    Color.white.opacity(0.04),
+                    Color.clear,
                   ],
                   startPoint: .topLeading,
                   endPoint: .bottomTrailing
@@ -104,7 +95,7 @@ struct QuotaPanelView: View {
               percent: model.shortPercentText,
               reset: model.shortResetText,
               palette: palette,
-              highlighted: true,
+              highlighted: false,
               scale: scale
             )
 
@@ -148,27 +139,40 @@ struct QuotaPanelView: View {
     }
   }
 
+  private func glassPanelFill(palette: Palette) -> LinearGradient {
+    LinearGradient(
+      colors: [
+        palette.backgroundTop,
+        palette.panelTop,
+        palette.panelBottom,
+        palette.backgroundBottom,
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
+
   private func header(palette: Palette, scale: Double) -> some View {
     HStack(spacing: 10 * scale) {
       Circle()
         .fill(palette.tone)
-        .frame(width: 18 * scale, height: 18 * scale)
-        .shadow(color: palette.tone.opacity(0.76), radius: 10 * scale, x: 0, y: 0)
+        .frame(width: 14 * scale, height: 14 * scale)
+        .shadow(color: palette.tone.opacity(0.36), radius: 8 * scale, x: 0, y: 0)
         .overlay(
           Circle()
-            .stroke(palette.tone.opacity(0.22), lineWidth: 8 * scale)
+            .stroke(palette.tone.opacity(0.12), lineWidth: 6 * scale)
         )
 
       VStack(alignment: .leading, spacing: 3 * scale) {
         Text(model.title)
-          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
+          .font(.system(size: 18 * scale, weight: .bold))
           .foregroundStyle(.white)
           .lineLimit(1)
           .minimumScaleFactor(0.72)
 
         Text(model.signalText)
-          .font(.system(size: 14 * scale, weight: .heavy, design: .rounded))
-          .foregroundStyle(Color.white.opacity(0.72))
+          .font(.system(size: 12 * scale, weight: .semibold))
+          .foregroundStyle(Color.white.opacity(0.62))
           .lineLimit(1)
           .minimumScaleFactor(0.7)
       }
@@ -177,21 +181,21 @@ struct QuotaPanelView: View {
 
       VStack(spacing: 3 * scale) {
         Text("计划")
-          .font(.system(size: 10 * scale, weight: .heavy, design: .rounded))
-          .foregroundStyle(Color.white.opacity(0.72))
+          .font(.system(size: 9 * scale, weight: .semibold))
+          .foregroundStyle(Color.white.opacity(0.55))
         Text(model.planText)
-          .font(.system(size: 18 * scale, weight: .black, design: .rounded))
+          .font(.system(size: 16 * scale, weight: .bold))
           .foregroundStyle(palette.tone)
           .lineLimit(1)
           .minimumScaleFactor(0.66)
       }
-      .frame(minWidth: 70 * scale)
-      .padding(.vertical, 7 * scale)
-      .padding(.horizontal, 10 * scale)
-      .background(palette.tone.opacity(0.18), in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
+      .frame(minWidth: 68 * scale)
+      .padding(.vertical, 8 * scale)
+      .padding(.horizontal, 11 * scale)
+      .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
-          .stroke(palette.tone.opacity(0.55), lineWidth: 1)
+          .stroke(palette.tone.opacity(0.34), lineWidth: 1)
       )
     }
   }
@@ -200,17 +204,18 @@ struct QuotaPanelView: View {
     Button {
       showingThemeSheet = true
     } label: {
-      Image(systemName: "paintpalette.fill")
-        .font(.system(size: 13 * scale, weight: .black))
+      Image(systemName: "slider.horizontal.3")
+        .font(.system(size: 12 * scale, weight: .bold))
         .foregroundStyle(.white.opacity(0.88))
-        .frame(width: 32 * scale, height: 32 * scale)
-        .background(Color.black.opacity(0.16), in: Circle())
+        .frame(width: 30 * scale, height: 30 * scale)
+        .background(Color.white.opacity(0.05), in: Circle())
         .overlay(
           Circle()
-            .stroke(palette.cardStroke.opacity(0.95), lineWidth: 1)
+            .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
     }
     .buttonStyle(.plain)
+    .controlSize(.small)
     .help("打开主题与自定义配色")
   }
 
@@ -233,8 +238,8 @@ struct LiquidGauge: View {
           .fill(
             RadialGradient(
               colors: [
-                Color.white.opacity(0.32),
-                Color(red: 0.12, green: 0.21, blue: 0.25).opacity(0.82),
+                Color.white.opacity(0.16),
+                Color(red: 0.09, green: 0.13, blue: 0.17).opacity(0.88),
               ],
               center: .topLeading,
               startRadius: 8,
@@ -267,7 +272,7 @@ struct LiquidGauge: View {
               amplitudeRatio: 0.024,
               wavelengthRatio: 0.92
             )
-            .fill(Color.white.opacity(0.12))
+            .fill(Color.white.opacity(0.08))
 
             WaveShape(
               progress: min(1, progress + 0.018),
@@ -275,7 +280,7 @@ struct LiquidGauge: View {
               amplitudeRatio: 0.014,
               wavelengthRatio: 1.05
             )
-            .stroke(Color.white.opacity(0.18), lineWidth: max(1.2, size * 0.012))
+            .stroke(Color.white.opacity(0.12), lineWidth: max(1.0, size * 0.01))
           }
           .clipShape(Circle())
         }
@@ -299,17 +304,17 @@ struct LiquidGauge: View {
             .foregroundStyle(.white)
             .monospacedDigit()
             .minimumScaleFactor(0.68)
-            .shadow(color: Color.black.opacity(0.22), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.14), radius: 4, x: 0, y: 2)
           Text("剩余")
-            .font(.system(size: max(15, size * 0.12), weight: .black, design: .rounded))
-            .foregroundStyle(.white.opacity(0.86))
+            .font(.system(size: max(14, size * 0.10), weight: .semibold))
+            .foregroundStyle(.white.opacity(0.78))
         }
       }
       .overlay(
         Circle()
-          .stroke(Color.white.opacity(0.28), lineWidth: 1.5)
+          .stroke(Color.white.opacity(0.18), lineWidth: 1)
       )
-      .shadow(color: Color.black.opacity(0.24), radius: 18, x: 0, y: 12)
+      .shadow(color: Color.black.opacity(0.16), radius: 12, x: 0, y: 8)
     }
   }
 }
@@ -359,14 +364,14 @@ struct MetricCard: View {
   var body: some View {
     let card = VStack(alignment: .leading, spacing: 7 * scale) {
       Text(label)
-        .font(.system(size: 13 * scale, weight: .black, design: .rounded))
-        .foregroundStyle(Color.white.opacity(0.68))
+        .font(.system(size: 12 * scale, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.58))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
 
       HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
         Text(percent)
-          .font(.system(size: 20 * scale, weight: .black, design: .rounded))
+          .font(.system(size: 18 * scale, weight: .bold))
           .foregroundStyle(.white)
           .monospacedDigit()
           .lineLimit(1)
@@ -375,21 +380,22 @@ struct MetricCard: View {
         Spacer(minLength: 2 * scale)
 
         Text(reset)
-          .font(.system(size: 15 * scale, weight: .black, design: .rounded))
-          .foregroundStyle(Color.white.opacity(0.64))
+          .font(.system(size: 15 * scale, weight: .semibold))
+          .foregroundStyle(Color.white.opacity(0.52))
           .lineLimit(1)
           .minimumScaleFactor(0.64)
       }
     }
-    .padding(9 * scale)
+    .padding(.horizontal, 12 * scale)
+    .padding(.vertical, 11 * scale)
     .frame(maxWidth: .infinity, minHeight: 58 * scale, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
-        .fill(highlighted ? palette.tone.opacity(0.20) : palette.cardBackground)
+        .fill(glassCardFill(palette: palette, highlighted: highlighted))
     )
     .overlay(
       RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
-        .stroke(highlighted ? palette.tone.opacity(0.56) : palette.cardStroke, lineWidth: 1)
+        .stroke(highlighted ? palette.tone.opacity(0.24) : Color.white.opacity(0.10), lineWidth: 1)
     )
 
     if isButton, let action {
@@ -404,6 +410,20 @@ struct MetricCard: View {
     } else {
       card
     }
+  }
+
+  private func glassCardFill(palette: Palette, highlighted: Bool) -> LinearGradient {
+    LinearGradient(
+      colors: highlighted ? [
+        palette.tone.opacity(0.12),
+        Color.white.opacity(0.04),
+      ] : [
+        palette.cardBackground,
+        palette.cardBackground.opacity(0.82),
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
   }
 }
 
@@ -843,14 +863,14 @@ struct CustomThemeColors {
   var liquidBottom: Color
 
   static let `default` = CustomThemeColors(
-    backgroundTop: Color(hex: "#103642"),
-    backgroundBottom: Color(hex: "#071720"),
-    panelTop: Color(hex: "#173644"),
-    panelBottom: Color(hex: "#0c202a"),
-    accent: Color(hex: "#ffbf61"),
-    liquidTop: Color(hex: "#ffd9a2"),
-    liquidMid: Color(hex: "#ffb560"),
-    liquidBottom: Color(hex: "#e28934")
+    backgroundTop: Color(hex: "#132736"),
+    backgroundBottom: Color(hex: "#09131B"),
+    panelTop: Color(hex: "#1A3243"),
+    panelBottom: Color(hex: "#101D28"),
+    accent: Color(hex: "#F2C078"),
+    liquidTop: Color(hex: "#F8D8A7"),
+    liquidMid: Color(hex: "#E9B56E"),
+    liquidBottom: Color(hex: "#C9894C")
   )
 }
 
@@ -898,16 +918,16 @@ final class ThemeStore: ObservableObject {
     switch preset {
     case .amberCurrent:
       return Palette(
-        backgroundTop: Color(hex: "#0c3d3b"),
-        backgroundBottom: Color(hex: "#071620"),
-        panelTop: Color(hex: "#143241"),
-        panelBottom: Color(hex: "#0b1e28"),
-        cardBackground: Color.white.opacity(0.08),
-        cardStroke: Color.white.opacity(0.16),
-        tone: Palette.accentColor(for: percent, low: RGB(255, 113, 111), mid: RGB(255, 199, 106), high: RGB(67, 228, 141)),
-        liquidTop: Color(hex: "#ffd9a2"),
-        liquidMid: Color(hex: "#ffb560"),
-        liquidBottom: Color(hex: "#e28934")
+        backgroundTop: Color(hex: "#122736"),
+        backgroundBottom: Color(hex: "#08131B"),
+        panelTop: Color(hex: "#193244"),
+        panelBottom: Color(hex: "#0E1C27"),
+        cardBackground: Color.white.opacity(0.075),
+        cardStroke: Color.white.opacity(0.12),
+        tone: Palette.accentColor(for: percent, low: RGB(216, 128, 96), mid: RGB(240, 192, 120), high: RGB(125, 209, 169)),
+        liquidTop: Color(hex: "#F7D8A9"),
+        liquidMid: Color(hex: "#E9B56E"),
+        liquidBottom: Color(hex: "#CB8C4F")
       )
     case .glacierMint:
       return Palette(
