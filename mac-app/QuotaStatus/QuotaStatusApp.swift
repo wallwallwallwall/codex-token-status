@@ -360,7 +360,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var weeklyLabel = "7天窗口"
   @Published var weeklyPercentText = "--"
   @Published var weeklyResetText = "--"
-  @Published var resetLabel = "重置额度"
+  @Published var resetLabel = "剩余重置次数"
   @Published var resetCountText = "--"
   @Published var resetAvailableText = "--"
   @Published var stale = false
@@ -421,7 +421,7 @@ final class QuotaViewModel: ObservableObject {
     weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
-    resetLabel = "重置额度"
+    resetLabel = "剩余重置次数"
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
   }
@@ -502,12 +502,12 @@ final class QuotaViewModel: ObservableObject {
 
   private func resetCount(_ credits: CodexRateLimitResetCredits?) -> String {
     guard let count = credits?.availableCount else { return "--" }
-    return "\(count)次"
+    return "剩余重置次数 \(count)"
   }
 
   private func resetAvailability(_ credits: CodexRateLimitResetCredits?) -> String {
-    guard let count = credits?.availableCount else { return "未提供" }
-    return count > 0 ? "可重置" : "不可重置"
+    guard let count = credits?.availableCount else { return "官方未提供" }
+    return count > 0 ? "当前可立即使用" : "当前暂不可用"
   }
 
   private func titleFromAccount(_ accountId: String) -> String {
