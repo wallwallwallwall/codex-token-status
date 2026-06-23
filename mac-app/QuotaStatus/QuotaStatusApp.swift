@@ -110,6 +110,15 @@ struct QuotaPanelView: View {
               scale: scale
             )
           }
+
+          MetricCard(
+            label: model.resetLabel,
+            percent: model.resetCountText,
+            reset: model.resetAvailableText,
+            palette: palette,
+            highlighted: false,
+            scale: scale
+          )
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentTopPadding)
@@ -351,6 +360,9 @@ final class QuotaViewModel: ObservableObject {
   @Published var weeklyLabel = "7天窗口"
   @Published var weeklyPercentText = "--"
   @Published var weeklyResetText = "--"
+  @Published var resetLabel = "重置额度"
+  @Published var resetCountText = "--"
+  @Published var resetAvailableText = "--"
   @Published var stale = false
 
   private let accountId: String
@@ -409,6 +421,9 @@ final class QuotaViewModel: ObservableObject {
     weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
+    resetLabel = "重置额度"
+    resetCountText = resetCount(snapshot.rateLimitResetCredits)
+    resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
   }
 
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
@@ -485,6 +500,16 @@ final class QuotaViewModel: ObservableObject {
     return "绿灯"
   }
 
+  private func resetCount(_ credits: CodexRateLimitResetCredits?) -> String {
+    guard let count = credits?.availableCount else { return "--" }
+    return "\(count)次"
+  }
+
+  private func resetAvailability(_ credits: CodexRateLimitResetCredits?) -> String {
+    guard let count = credits?.availableCount else { return "未提供" }
+    return count > 0 ? "可重置" : "不可重置"
+  }
+
   private func titleFromAccount(_ accountId: String) -> String {
     accountId
       .split { "-_.".contains($0) }
@@ -543,19 +568,35 @@ struct QuotaWindow {
 struct CodexRateLimitEnvelope: Decodable {
   let rateLimitsByLimitId: [String: CodexRateLimitSnapshot]?
   let rateLimits: CodexRateLimitSnapshot?
+  let rateLimitResetCredits: CodexRateLimitResetCredits?
   let planType: String?
   let primary: CodexRateLimitWindow?
   let secondary: CodexRateLimitWindow?
 
   var snapshot: CodexRateLimitSnapshot? {
     if let codex = rateLimitsByLimitId?["codex"] {
-      return codex
+      return CodexRateLimitSnapshot(
+        planType: codex.planType,
+        primary: codex.primary,
+        secondary: codex.secondary,
+        rateLimitResetCredits: rateLimitResetCredits
+      )
     }
     if let rateLimits {
-      return rateLimits
+      return CodexRateLimitSnapshot(
+        planType: rateLimits.planType,
+        primary: rateLimits.primary,
+        secondary: rateLimits.secondary,
+        rateLimitResetCredits: rateLimitResetCredits
+      )
     }
     if planType != nil || primary != nil || secondary != nil {
-      return CodexRateLimitSnapshot(planType: planType, primary: primary, secondary: secondary)
+      return CodexRateLimitSnapshot(
+        planType: planType,
+        primary: primary,
+        secondary: secondary,
+        rateLimitResetCredits: rateLimitResetCredits
+      )
     }
     return nil
   }
@@ -565,12 +606,17 @@ struct CodexRateLimitSnapshot: Decodable {
   let planType: String?
   let primary: CodexRateLimitWindow?
   let secondary: CodexRateLimitWindow?
+  let rateLimitResetCredits: CodexRateLimitResetCredits?
 }
 
 struct CodexRateLimitWindow: Decodable {
   let usedPercent: Double?
   let windowDurationMins: Double?
   let resetsAt: Double?
+}
+
+struct CodexRateLimitResetCredits: Decodable {
+  let availableCount: Int?
 }
 
 final class CodexRateLimitReader {
