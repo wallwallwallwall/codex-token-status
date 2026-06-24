@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let countdownPrefix = hasCountdown ? statusBarCountdownPrefix(for: title) : ""
     let codexFontSize: CGFloat = NSFont.systemFontSize
     let metricsFontSize: CGFloat = hasCountdown ? 8.8 : NSFont.systemFontSize
-    let countdownFontSize: CGFloat = 7.8
+    let countdownFontSize: CGFloat = 8.8
     let codexFont = NSFont.monospacedSystemFont(ofSize: codexFontSize, weight: .bold)
     let metricsFont = NSFont.monospacedSystemFont(ofSize: metricsFontSize, weight: .bold)
     let countdownFont = NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold)
@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let image = NSImage(size: imageSize, flipped: true) { _ in
       if hasCountdown {
-        let lineGap: CGFloat = -4.6
+        let lineGap: CGFloat = -2.6
         let totalHeight = topLineHeight + countdownSize.height + lineGap
         let titleY = max(0, floor((imageSize.height - totalHeight) / 2))
         let metricsY = titleY + max(0, floor((codexSize.height - metricsSize.height) * 0.55))
