@@ -76,7 +76,7 @@ Quota Status is local-first:
 Download either artifact from the GitHub release:
 
 - `QuotaStatus-mac.zip`: unzip and open `QuotaStatus.app`.
-- `QuotaStatus-1.0.1.pkg`: installer package that places the app in `/Applications`.
+- `QuotaStatus-1.0.2.pkg`: installer package that places the app in `/Applications`.
 
 The app is ad-hoc signed and not notarized. On first launch, macOS may block it. If that happens, use right-click `Open`, or allow it from `System Settings -> Privacy & Security`.
 
