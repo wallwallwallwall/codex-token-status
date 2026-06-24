@@ -64,11 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func renderStatusTitle(_ title: String, countdown: String, on item: NSStatusItem) {
+    let hasCountdown = !countdown.isEmpty
+    let countdownPrefix = hasCountdown ? statusBarCountdownPrefix(for: title) : ""
+    let visibleCountdown = hasCountdown ? "\(countdownPrefix)\(countdown)" : ""
+    let topLineFontSize: CGFloat = hasCountdown ? 10.0 : NSFont.systemFontSize
+    let countdownFontSize: CGFloat = 8.8
+
     let paragraphStyle = NSMutableParagraphStyle()
     paragraphStyle.lineBreakMode = .byClipping
-    paragraphStyle.alignment = .center
+    paragraphStyle.alignment = .left
 
-    let text = countdown.isEmpty ? title : "\(title)\n\(countdown)"
+    let text = hasCountdown ? "\(title)\n\(visibleCountdown)" : title
     let attributed = NSMutableAttributedString(
       string: text,
       attributes: [
@@ -76,22 +82,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         .paragraphStyle: paragraphStyle,
       ]
     )
+    let titleLength = (title as NSString).length
     attributed.addAttributes(
-      [.font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .bold)],
-      range: NSRange(location: 0, length: title.count)
+      [.font: NSFont.monospacedSystemFont(ofSize: topLineFontSize, weight: .bold)],
+      range: NSRange(location: 0, length: titleLength)
     )
-    if !countdown.isEmpty {
+    if hasCountdown {
       attributed.addAttributes(
         [
-          .font: NSFont.monospacedSystemFont(ofSize: 8.0, weight: .semibold),
-          .foregroundColor: NSColor.secondaryLabelColor,
+          .font: NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold),
+          .foregroundColor: NSColor.labelColor,
         ],
-        range: NSRange(location: title.count + 1, length: countdown.count)
+        range: NSRange(location: titleLength + 1, length: (visibleCountdown as NSString).length)
       )
     }
 
-    item.length = max(122, CGFloat(max(title.count, countdown.count)) * 8.4)
+    let longestLineLength = max((title as NSString).length, (visibleCountdown as NSString).length)
+    item.length = max(116, CGFloat(longestLineLength) * (hasCountdown ? 7.4 : 8.4))
     item.button?.attributedTitle = attributed
+  }
+
+  private func statusBarCountdownPrefix(for title: String) -> String {
+    guard let separatorIndex = title.firstIndex(of: "\u{00A0}") else {
+      return ""
+    }
+    let prefixLength = title.distance(from: title.startIndex, to: title.index(after: separatorIndex))
+    return String(repeating: "\u{00A0}", count: prefixLength)
   }
 
   @objc private func showMainWindow() {
