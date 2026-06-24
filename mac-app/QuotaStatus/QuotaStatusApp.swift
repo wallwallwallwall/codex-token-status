@@ -67,21 +67,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let hasCountdown = !countdown.isEmpty
     let countdownPrefix = hasCountdown ? statusBarCountdownPrefix(for: title) : ""
     let visibleCountdown = hasCountdown ? "\(countdownPrefix)\(countdown)" : ""
-    let topLineFontSize: CGFloat = hasCountdown ? 9.2 : NSFont.systemFontSize
-    let countdownFontSize: CGFloat = 8.4
+    let topLineFontSize: CGFloat = hasCountdown ? 8.8 : NSFont.systemFontSize
+    let countdownFontSize: CGFloat = 7.8
     let titleFont = NSFont.monospacedSystemFont(ofSize: topLineFontSize, weight: .bold)
     let countdownFont = NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold)
 
     let paragraphStyle = NSMutableParagraphStyle()
     paragraphStyle.lineBreakMode = .byClipping
     paragraphStyle.alignment = .left
-    paragraphStyle.lineSpacing = -3.0
+    paragraphStyle.lineSpacing = -4.0
 
     let text = hasCountdown ? "\(title)\n\(visibleCountdown)" : title
     let attributed = NSMutableAttributedString(
       string: text,
       attributes: [
-        .baselineOffset: hasCountdown ? -1.0 : 0,
+        .baselineOffset: hasCountdown ? -2.8 : 0,
         .foregroundColor: NSColor.labelColor,
         .paragraphStyle: paragraphStyle,
       ]
@@ -525,31 +525,40 @@ struct MetricCard: View {
     )
   }
 
+  private var metricPercentColumnWidth: Double {
+    52 * scale
+  }
+
+  private var metricResetColumnWidth: Double {
+    54 * scale
+  }
+
   private var percentView: some View {
     Text(percent)
-      .font(.system(size: 18 * scale, weight: .bold))
+      .font(.system(size: 16 * scale, weight: .bold))
       .foregroundStyle(.white)
       .monospacedDigit()
       .lineLimit(1)
-      .minimumScaleFactor(0.72)
-      .layoutPriority(3)
-      .fixedSize(horizontal: true, vertical: false)
+      .minimumScaleFactor(0.5)
+      .allowsTightening(true)
+      .layoutPriority(5)
   }
 
   private var metricValueRow: some View {
     HStack(alignment: .lastTextBaseline, spacing: 0) {
       percentView
-        .frame(width: 66 * scale, alignment: .leading)
+        .frame(width: metricPercentColumnWidth, alignment: .leading)
 
       Spacer(minLength: 8 * scale)
 
       Text(reset)
-        .font(.system(size: 15 * scale, weight: .semibold))
+        .font(.system(size: 13.5 * scale, weight: .semibold))
         .foregroundStyle(Color.white.opacity(0.52))
         .lineLimit(1)
-        .minimumScaleFactor(0.64)
-        .layoutPriority(1)
-        .fixedSize(horizontal: true, vertical: false)
+        .minimumScaleFactor(0.5)
+        .allowsTightening(true)
+        .layoutPriority(4)
+        .frame(width: metricResetColumnWidth, alignment: .trailing)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
