@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import SwiftUI
+import UserNotifications
 
 @main
 struct QuotaStatusApp: App {
@@ -47,34 +48,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func configureStatusItem() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    renderStatusTitle(QuotaViewModel.shared.statusBarTitle, on: item)
+    renderStatusTitle(QuotaViewModel.shared.statusBarTitle, countdown: QuotaViewModel.shared.statusBarCountdownText, on: item)
     item.button?.target = self
     item.button?.action = #selector(showMainWindow)
     statusItem = item
 
     QuotaViewModel.shared.$statusBarTitle
+      .combineLatest(QuotaViewModel.shared.$statusBarCountdownText)
       .receive(on: DispatchQueue.main)
-      .sink { [weak self] title in
+      .sink { [weak self] title, countdown in
         guard let item = self?.statusItem else { return }
-        self?.renderStatusTitle(title, on: item)
+        self?.renderStatusTitle(title, countdown: countdown, on: item)
       }
       .store(in: &cancellables)
   }
 
-  private func renderStatusTitle(_ title: String, on item: NSStatusItem) {
+  private func renderStatusTitle(_ title: String, countdown: String, on item: NSStatusItem) {
     let paragraphStyle = NSMutableParagraphStyle()
     paragraphStyle.lineBreakMode = .byClipping
     paragraphStyle.alignment = .center
 
-    item.length = max(118, CGFloat(title.count) * 8.2)
-    item.button?.attributedTitle = NSAttributedString(
-      string: title,
+    let text = countdown.isEmpty ? title : "\(title)\n\(countdown)"
+    let attributed = NSMutableAttributedString(
+      string: text,
       attributes: [
-        .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .bold),
         .foregroundColor: NSColor.labelColor,
         .paragraphStyle: paragraphStyle,
       ]
     )
+    attributed.addAttributes(
+      [.font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .bold)],
+      range: NSRange(location: 0, length: title.count)
+    )
+    if !countdown.isEmpty {
+      attributed.addAttributes(
+        [
+          .font: NSFont.monospacedSystemFont(ofSize: 8.0, weight: .semibold),
+          .foregroundColor: NSColor.secondaryLabelColor,
+        ],
+        range: NSRange(location: title.count + 1, length: countdown.count)
+      )
+    }
+
+    item.length = max(122, CGFloat(max(title.count, countdown.count)) * 8.4)
+    item.button?.attributedTitle = attributed
   }
 
   @objc private func showMainWindow() {
@@ -172,7 +189,7 @@ struct QuotaPanelView: View {
     }
     .ignoresSafeArea()
     .sheet(isPresented: $showingThemeSheet) {
-      ThemeSettingsSheet(themeStore: themeStore)
+      ThemeSettingsSheet(themeStore: themeStore, model: model)
     }
   }
 
@@ -591,6 +608,7 @@ struct ResetActionCard: View {
 
 struct ThemeSettingsSheet: View {
   @ObservedObject var themeStore: ThemeStore
+  @ObservedObject var model: QuotaViewModel
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
@@ -600,13 +618,55 @@ struct ThemeSettingsSheet: View {
       VStack(alignment: .leading, spacing: 16) {
         HStack {
           VStack(alignment: .leading, spacing: 4) {
-            Text("主题")
+            Text("设置")
               .font(.system(size: 22, weight: .black, design: .rounded))
-            Text("4 套内置模板 + 1 套自定义配色")
+            Text("状态栏、通知和配色")
               .foregroundStyle(.secondary)
           }
           Spacer()
           Button("完成") { dismiss() }
+        }
+
+        settingsSection("状态栏") {
+          Toggle("显示倒计时", isOn: Binding(
+            get: { model.statusBarShowsCountdown },
+            set: { model.setStatusBarShowsCountdown($0) }
+          ))
+
+          Picker("倒计时来源", selection: Binding(
+            get: { model.statusBarCountdownTarget },
+            set: { model.setStatusBarCountdownTarget($0) }
+          )) {
+            Text("5小时倒计时").tag(CountdownTarget.fiveHour)
+            Text("7天倒计时").tag(CountdownTarget.sevenDay)
+          }
+          .pickerStyle(.segmented)
+          .disabled(!model.statusBarShowsCountdown)
+        }
+
+        settingsSection("通知提醒") {
+          Toggle("开启通知提醒", isOn: Binding(
+            get: { model.notificationsEnabled },
+            set: { model.setNotificationsEnabled($0) }
+          ))
+
+          Toggle("5小时剩余 50%", isOn: Binding(
+            get: { model.notificationEnabled(for: .fifty) },
+            set: { model.setNotificationThreshold(.fifty, enabled: $0) }
+          ))
+          .disabled(!model.notificationsEnabled)
+
+          Toggle("5小时剩余 20%", isOn: Binding(
+            get: { model.notificationEnabled(for: .twenty) },
+            set: { model.setNotificationThreshold(.twenty, enabled: $0) }
+          ))
+          .disabled(!model.notificationsEnabled)
+
+          Toggle("5小时剩余 5%", isOn: Binding(
+            get: { model.notificationEnabled(for: .five) },
+            set: { model.setNotificationThreshold(.five, enabled: $0) }
+          ))
+          .disabled(!model.notificationsEnabled)
         }
 
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -686,11 +746,48 @@ struct ThemeSettingsSheet: View {
         .labelsHidden()
     }
   }
+
+  private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(title)
+        .font(.system(size: 16, weight: .black, design: .rounded))
+      content()
+    }
+    .padding(12)
+    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+    )
+  }
+}
+
+enum CountdownTarget: String, CaseIterable, Identifiable {
+  case fiveHour
+  case sevenDay
+
+  var id: String { rawValue }
+}
+
+enum NotificationThreshold: Int, CaseIterable, Identifiable {
+  case fifty = 50
+  case twenty = 20
+  case five = 5
+
+  var id: Int { rawValue }
 }
 
 @MainActor
 final class QuotaViewModel: ObservableObject {
   static let shared = QuotaViewModel()
+
+  private static let defaults = UserDefaults.standard
+  private static let showsCountdownKey = "QuotaStatus.statusBar.showsCountdown"
+  private static let countdownTargetKey = "QuotaStatus.statusBar.countdownTarget"
+  private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
+  private static let notify50Key = "QuotaStatus.notifications.threshold50"
+  private static let notify20Key = "QuotaStatus.notifications.threshold20"
+  private static let notify5Key = "QuotaStatus.notifications.threshold5"
 
   @Published var title = "Mac Codex"
   @Published var signalText = "读取中"
@@ -710,10 +807,23 @@ final class QuotaViewModel: ObservableObject {
   @Published var isResetting = false
   @Published var stale = false
   @Published var statusBarTitle = "CodeX\u{00A0}--|--"
+  @Published var statusBarCountdownText = ""
+  @Published var statusBarShowsCountdown = QuotaViewModel.storedBool(QuotaViewModel.showsCountdownKey, defaultValue: false)
+  @Published var statusBarCountdownTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.countdownTargetKey) ?? "") ?? .fiveHour
+  @Published var notificationsEnabled = QuotaViewModel.storedBool(QuotaViewModel.notificationsEnabledKey, defaultValue: false)
+  @Published var notifyAt50 = QuotaViewModel.storedBool(QuotaViewModel.notify50Key, defaultValue: true)
+  @Published var notifyAt20 = QuotaViewModel.storedBool(QuotaViewModel.notify20Key, defaultValue: true)
+  @Published var notifyAt5 = QuotaViewModel.storedBool(QuotaViewModel.notify5Key, defaultValue: true)
 
   private let accountId: String
   private let codexCommand: String
   private var timer: Timer?
+  private var countdownTimer: Timer?
+  private var shortResetDate: Date?
+  private var weeklyResetDate: Date?
+  private var shortRemainingPercent: Int?
+  private var notifiedWindowKey: String?
+  private var notifiedThresholds = Set<Int>()
 
   init() {
     accountId = Self.argumentValue("accountId") ??
@@ -727,10 +837,14 @@ final class QuotaViewModel: ObservableObject {
     timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
       Task { await self?.fetchStatus() }
     }
+    countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+      Task { await self?.refreshStatusBarDisplay() }
+    }
   }
 
   deinit {
     timer?.invalidate()
+    countdownTimer?.invalidate()
   }
 
   private func load() {
@@ -760,6 +874,9 @@ final class QuotaViewModel: ObservableObject {
     primaryPercent = percent
     stale = false
     signalText = signalFor(percent)
+    shortResetDate = short?.resetDate
+    weeklyResetDate = weekly?.resetDate
+    shortRemainingPercent = short.map { clamp($0.percent ?? 0) }
 
     shortLabel = labelForWindow(short?.label, fallback: "5小时窗口")
     shortPercentText = percentText(short)
@@ -767,7 +884,8 @@ final class QuotaViewModel: ObservableObject {
     weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
-    statusBarTitle = "CodeX\u{00A0}\(shortPercentText)|\(weeklyPercentText)"
+    refreshStatusBarDisplay()
+    sendThresholdNotificationsIfNeeded()
     resetLabel = "剩余重置次数"
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
@@ -796,6 +914,60 @@ final class QuotaViewModel: ObservableObject {
     }
   }
 
+  func setStatusBarShowsCountdown(_ enabled: Bool) {
+    statusBarShowsCountdown = enabled
+    Self.defaults.set(enabled, forKey: Self.showsCountdownKey)
+    refreshStatusBarDisplay()
+  }
+
+  func setStatusBarCountdownTarget(_ target: CountdownTarget) {
+    statusBarCountdownTarget = target
+    Self.defaults.set(target.rawValue, forKey: Self.countdownTargetKey)
+    refreshStatusBarDisplay()
+  }
+
+  func setNotificationsEnabled(_ enabled: Bool) {
+    notificationsEnabled = enabled
+    Self.defaults.set(enabled, forKey: Self.notificationsEnabledKey)
+    if enabled {
+      requestNotificationAuthorization()
+      sendThresholdNotificationsIfNeeded()
+    }
+  }
+
+  func notificationEnabled(for threshold: NotificationThreshold) -> Bool {
+    switch threshold {
+    case .fifty: return notifyAt50
+    case .twenty: return notifyAt20
+    case .five: return notifyAt5
+    }
+  }
+
+  func setNotificationThreshold(_ threshold: NotificationThreshold, enabled: Bool) {
+    switch threshold {
+    case .fifty:
+      notifyAt50 = enabled
+      Self.defaults.set(enabled, forKey: Self.notify50Key)
+    case .twenty:
+      notifyAt20 = enabled
+      Self.defaults.set(enabled, forKey: Self.notify20Key)
+    case .five:
+      notifyAt5 = enabled
+      Self.defaults.set(enabled, forKey: Self.notify5Key)
+    }
+    sendThresholdNotificationsIfNeeded()
+  }
+
+  private func refreshStatusBarDisplay() {
+    statusBarTitle = "CodeX\u{00A0}\(shortPercentText)|\(weeklyPercentText)"
+    guard statusBarShowsCountdown else {
+      statusBarCountdownText = ""
+      return
+    }
+    let resetDate = statusBarCountdownTarget == .fiveHour ? shortResetDate : weeklyResetDate
+    statusBarCountdownText = countdownText(until: resetDate)
+  }
+
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
     if let value = short?.percent { return clamp(value) }
     if let value = weekly?.percent { return clamp(value) }
@@ -817,8 +989,59 @@ final class QuotaViewModel: ObservableObject {
       percent: Double(percent),
       percentText: "\(percent)%",
       resetText: resetText,
-      resetAt: nil
+      resetAt: nil,
+      resetDate: window?.resetsAt.map { Date(timeIntervalSince1970: $0) }
     )
+  }
+
+  private func countdownText(until resetDate: Date?) -> String {
+    guard let resetDate else { return "--" }
+    let totalSeconds = max(0, Int(resetDate.timeIntervalSinceNow.rounded()))
+    let days = totalSeconds / 86_400
+    let hours = (totalSeconds % 86_400) / 3_600
+    let minutes = (totalSeconds % 3_600) / 60
+    let seconds = totalSeconds % 60
+    if days > 0 {
+      return "\(days)d \(hours)h \(minutes)m \(seconds)s"
+    }
+    return "\(hours)h \(minutes)m \(seconds)s"
+  }
+
+  private func sendThresholdNotificationsIfNeeded() {
+    guard notificationsEnabled, let percent = shortRemainingPercent, let resetDate = shortResetDate else {
+      return
+    }
+
+    let windowKey = String(Int(resetDate.timeIntervalSince1970))
+    if notifiedWindowKey != windowKey {
+      notifiedWindowKey = windowKey
+      notifiedThresholds.removeAll()
+    }
+
+    for threshold in NotificationThreshold.allCases where notificationEnabled(for: threshold) {
+      guard percent <= threshold.rawValue, !notifiedThresholds.contains(threshold.rawValue) else {
+        continue
+      }
+      notifiedThresholds.insert(threshold.rawValue)
+      sendNotification(for: threshold, currentPercent: percent)
+    }
+  }
+
+  private func requestNotificationAuthorization() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+  }
+
+  private func sendNotification(for threshold: NotificationThreshold, currentPercent: Int) {
+    let content = UNMutableNotificationContent()
+    content.title = "CodeX 5小时额度提醒"
+    content.body = "5小时剩余额度已到 \(threshold.rawValue)%，当前剩余 \(currentPercent)%"
+    content.sound = .default
+    let request = UNNotificationRequest(
+      identifier: "quota-status-5h-\(threshold.rawValue)-\(Int(shortResetDate?.timeIntervalSince1970 ?? 0))",
+      content: content,
+      trigger: nil
+    )
+    UNUserNotificationCenter.current().add(request)
   }
 
   private func percentText(_ window: QuotaWindow?) -> String {
@@ -901,6 +1124,11 @@ final class QuotaViewModel: ObservableObject {
     max(0, min(100, Int(value.rounded())))
   }
 
+  private static func storedBool(_ key: String, defaultValue: Bool) -> Bool {
+    guard defaults.object(forKey: key) != nil else { return defaultValue }
+    return defaults.bool(forKey: key)
+  }
+
   private static func argumentValue(_ name: String) -> String? {
     let prefix = "--\(name)="
     return CommandLine.arguments.first { $0.hasPrefix(prefix) }?.dropFirst(prefix.count).description
@@ -940,6 +1168,7 @@ struct QuotaWindow {
   let percentText: String?
   let resetText: String?
   let resetAt: String?
+  let resetDate: Date?
 }
 
 struct CodexRateLimitEnvelope: Decodable {
