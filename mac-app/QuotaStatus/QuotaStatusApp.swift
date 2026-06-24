@@ -729,6 +729,45 @@ struct ThemeSettingsSheet: View {
           Button("完成") { dismiss() }
         }
 
+        settingsSection("Token 数据刷新") {
+          Text("默认 30 秒，从本机 Codex 读取 token 数据。")
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+
+          Picker("刷新间隔", selection: Binding(
+            get: { model.refreshIntervalMode },
+            set: { model.setRefreshIntervalMode($0) }
+          )) {
+            Text("30 秒").tag(RefreshIntervalMode.seconds30)
+            Text("1 分钟").tag(RefreshIntervalMode.minute1)
+            Text("5 分钟").tag(RefreshIntervalMode.minute5)
+            Text("自定义").tag(RefreshIntervalMode.custom)
+          }
+          .pickerStyle(.segmented)
+
+          if model.refreshIntervalMode == .custom {
+            HStack(spacing: 10) {
+              Text("自定义间隔")
+              TextField("秒", value: Binding(
+                get: { model.refreshIntervalCustomSeconds },
+                set: { model.setRefreshIntervalCustomSeconds($0) }
+              ), format: .number)
+              .textFieldStyle(.roundedBorder)
+              .frame(width: 88)
+              Text("秒")
+              Spacer()
+            }
+
+            Text("支持 10 秒到 86400 秒。当前每 \(model.refreshIntervalDisplayText) 读取一次。")
+              .font(.system(size: 12, weight: .semibold, design: .rounded))
+              .foregroundStyle(.secondary)
+          } else {
+            Text("当前每 \(model.refreshIntervalDisplayText) 读取一次。")
+              .font(.system(size: 12, weight: .semibold, design: .rounded))
+              .foregroundStyle(.secondary)
+          }
+        }
+
         settingsSection("状态栏") {
           HStack(spacing: 16) {
             Toggle("显示倒计时", isOn: Binding(
@@ -888,6 +927,24 @@ enum CountdownTarget: String, CaseIterable, Identifiable {
   var id: String { rawValue }
 }
 
+enum RefreshIntervalMode: String, CaseIterable, Identifiable {
+  case seconds30
+  case minute1
+  case minute5
+  case custom
+
+  var id: String { rawValue }
+
+  var seconds: Int {
+    switch self {
+    case .seconds30: return 30
+    case .minute1: return 60
+    case .minute5: return 300
+    case .custom: return 0
+    }
+  }
+}
+
 enum NotificationThreshold: Int, CaseIterable, Identifiable {
   case fifty = 50
   case twenty = 20
@@ -905,6 +962,8 @@ final class QuotaViewModel: ObservableObject {
   private static let showsResetTimeKey = "QuotaStatus.statusBar.showsResetTime"
   private static let countdownTargetKey = "QuotaStatus.statusBar.countdownTarget"
   private static let resetTimeTargetKey = "QuotaStatus.statusBar.resetTimeTarget"
+  private static let refreshIntervalModeKey = "QuotaStatus.refresh.intervalMode"
+  private static let refreshIntervalCustomSecondsKey = "QuotaStatus.refresh.customSeconds"
   private static let displayCacheKey = "QuotaStatus.display.cache"
   private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
   private static let notify50Key = "QuotaStatus.notifications.threshold50"
@@ -934,6 +993,8 @@ final class QuotaViewModel: ObservableObject {
   @Published var statusBarShowsResetTime = QuotaViewModel.storedBool(QuotaViewModel.showsResetTimeKey, defaultValue: false)
   @Published var statusBarCountdownTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.countdownTargetKey) ?? "") ?? .fiveHour
   @Published var statusBarResetTimeTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.resetTimeTargetKey) ?? "") ?? .fiveHour
+  @Published var refreshIntervalMode = RefreshIntervalMode(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.refreshIntervalModeKey) ?? "") ?? .seconds30
+  @Published var refreshIntervalCustomSeconds = QuotaViewModel.storedRefreshIntervalCustomSeconds()
   @Published var notificationsEnabled = QuotaViewModel.storedBool(QuotaViewModel.notificationsEnabledKey, defaultValue: false)
   @Published var notifyAt50 = QuotaViewModel.storedBool(QuotaViewModel.notify50Key, defaultValue: true)
   @Published var notifyAt20 = QuotaViewModel.storedBool(QuotaViewModel.notify20Key, defaultValue: true)
@@ -964,9 +1025,7 @@ final class QuotaViewModel: ObservableObject {
 
     restoreDisplayCache()
     load()
-    timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
-      Task { await self?.fetchStatus() }
-    }
+    scheduleStatusTimer()
     countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       Task { await self?.refreshStatusBarDisplay() }
     }
@@ -1083,6 +1142,31 @@ final class QuotaViewModel: ObservableObject {
     refreshStatusBarDisplay()
   }
 
+  var statusRefreshIntervalSeconds: TimeInterval {
+    let seconds = refreshIntervalMode == .custom ? refreshIntervalCustomSeconds : refreshIntervalMode.seconds
+    return TimeInterval(Self.clampRefreshIntervalSeconds(seconds))
+  }
+
+  var refreshIntervalDisplayText: String {
+    Self.refreshIntervalText(Int(statusRefreshIntervalSeconds))
+  }
+
+  func setRefreshIntervalMode(_ mode: RefreshIntervalMode) {
+    refreshIntervalMode = mode
+    Self.defaults.set(mode.rawValue, forKey: Self.refreshIntervalModeKey)
+    scheduleStatusTimer()
+    Task { await fetchStatus() }
+  }
+
+  func setRefreshIntervalCustomSeconds(_ seconds: Int) {
+    let clamped = Self.clampRefreshIntervalSeconds(seconds)
+    refreshIntervalCustomSeconds = clamped
+    Self.defaults.set(clamped, forKey: Self.refreshIntervalCustomSecondsKey)
+    if refreshIntervalMode == .custom {
+      scheduleStatusTimer()
+    }
+  }
+
   func setNotificationsEnabled(_ enabled: Bool) {
     notificationsEnabled = enabled
     Self.defaults.set(enabled, forKey: Self.notificationsEnabledKey)
@@ -1144,6 +1228,14 @@ final class QuotaViewModel: ObservableObject {
         }
       }
     }
+  }
+
+  private func scheduleStatusTimer() {
+    timer?.invalidate()
+    timer = Timer.scheduledTimer(withTimeInterval: statusRefreshIntervalSeconds, repeats: true) { [weak self] _ in
+      Task { await self?.fetchStatus() }
+    }
+    timer?.tolerance = min(statusRefreshIntervalSeconds * 0.1, 10)
   }
 
   private func refreshStatusBarDisplay() {
@@ -1398,6 +1490,30 @@ final class QuotaViewModel: ObservableObject {
   private static func storedBool(_ key: String, defaultValue: Bool) -> Bool {
     guard defaults.object(forKey: key) != nil else { return defaultValue }
     return defaults.bool(forKey: key)
+  }
+
+  private static func storedRefreshIntervalCustomSeconds() -> Int {
+    guard defaults.object(forKey: refreshIntervalCustomSecondsKey) != nil else {
+      return 300
+    }
+    return clampRefreshIntervalSeconds(defaults.integer(forKey: refreshIntervalCustomSecondsKey))
+  }
+
+  private static func clampRefreshIntervalSeconds(_ seconds: Int) -> Int {
+    min(86_400, max(10, seconds))
+  }
+
+  private static func refreshIntervalText(_ seconds: Int) -> String {
+    if seconds < 60 {
+      return "\(seconds) 秒"
+    }
+    if seconds % 3600 == 0 {
+      return "\(seconds / 3600) 小时"
+    }
+    if seconds % 60 == 0 {
+      return "\(seconds / 60) 分钟"
+    }
+    return "\(seconds) 秒"
   }
 
   private static func argumentValue(_ name: String) -> String? {

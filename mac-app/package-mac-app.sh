@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="QuotaStatus"
-VERSION="1.0.0"
+VERSION="1.0.1"
 APP_DIR="${ROOT_DIR}/dist/${APP_NAME}.app"
 PKG_PATH="${ROOT_DIR}/dist/${APP_NAME}-${VERSION}.pkg"
 

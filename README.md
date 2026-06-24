@@ -20,6 +20,7 @@ This app was built for that gap. It keeps a lightweight local quota display outs
 
 - Shows remaining quota for the 5-hour window and 7-day window.
 - Shows reset time or countdown in the macOS menu bar.
+- Lets you choose how often token data is refreshed from local Codex: 30 seconds by default, 1 minute, 5 minutes, or a custom interval.
 - Shows available reset-credit count and whether reset is currently available.
 - Sends optional macOS notifications when the 5-hour window reaches 50%, 20%, or 5%.
 - Provides a compact native SwiftUI panel with selectable color themes.
@@ -75,7 +76,7 @@ Quota Status is local-first:
 Download either artifact from the GitHub release:
 
 - `QuotaStatus-mac.zip`: unzip and open `QuotaStatus.app`.
-- `QuotaStatus-1.0.0.pkg`: installer package that places the app in `/Applications`.
+- `QuotaStatus-1.0.1.pkg`: installer package that places the app in `/Applications`.
 
 The app is ad-hoc signed and not notarized. On first launch, macOS may block it. If that happens, use right-click `Open`, or allow it from `System Settings -> Privacy & Security`.
 
@@ -132,6 +133,12 @@ The app also accepts:
 ```bash
 open QuotaStatus.app --args --title="My Codex" --codexCommand="/path/to/codex"
 ```
+
+Token data refresh interval is configurable in the app settings:
+
+- Default: 30 seconds.
+- Presets: 1 minute and 5 minutes.
+- Custom: any value from 10 seconds to 86400 seconds.
 
 ## Menu Bar Display
 
