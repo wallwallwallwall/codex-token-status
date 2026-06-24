@@ -1,8 +1,10 @@
-# Quota Status
+# Codex Token Status
 
-A small native macOS menu bar app for checking local Codex quota status.
+A small native macOS menu bar app for checking local Codex token quota status.
 
 It shows the remaining percentage for the 5-hour window and the 7-day window, reset time or countdown, reset-credit availability, and optional low-quota notifications.
+
+Search keywords: Codex token status, Codex quota, Codex usage, macOS menu bar, token reset time.
 
 ![Main panel](docs/screenshots/main-panel.png)
 
