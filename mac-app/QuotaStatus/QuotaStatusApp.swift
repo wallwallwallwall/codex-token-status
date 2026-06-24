@@ -228,21 +228,40 @@ struct QuotaPanelView: View {
             .minimumScaleFactor(0.66)
         }
 
-        headerControlButton(systemName: "minus", palette: palette, scale: scale, help: "最小化窗口", action: minimizeWindow)
-        themeButton(palette: palette, scale: scale)
+        settingsMenuButton(palette: palette, scale: scale)
       }
     }
   }
 
-  private func headerControlButton(
-    systemName: String,
-    palette: Palette,
-    scale: Double,
-    help: String,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Image(systemName: systemName)
+  private func settingsMenuButton(palette: Palette, scale: Double) -> some View {
+    Menu {
+      Button {
+        minimizeWindow()
+      } label: {
+        Label("最小化", systemImage: "minus")
+      }
+
+      Button {
+        hideDockIcon()
+      } label: {
+        Label("隐藏", systemImage: "dock.rectangle")
+      }
+
+      Button {
+        quitApp()
+      } label: {
+        Label("退出", systemImage: "power")
+      }
+
+      Divider()
+
+      Button {
+        showingThemeSheet = true
+      } label: {
+        Label("设置", systemImage: "slider.horizontal.3")
+      }
+    } label: {
+      Image(systemName: "slider.horizontal.3")
         .font(.system(size: 12 * scale, weight: .bold))
         .foregroundStyle(.white.opacity(0.88))
         .frame(width: 26 * scale, height: 26 * scale)
@@ -254,22 +273,20 @@ struct QuotaPanelView: View {
     }
     .buttonStyle(.plain)
     .controlSize(.small)
-    .help(help)
-  }
-
-  private func themeButton(palette: Palette, scale: Double) -> some View {
-    headerControlButton(
-      systemName: "slider.horizontal.3",
-      palette: palette,
-      scale: scale,
-      help: "打开主题与自定义配色"
-    ) {
-      showingThemeSheet = true
-    }
+    .menuStyle(.button)
+    .help("打开窗口菜单")
   }
 
   private func minimizeWindow() {
     NSApp.keyWindow?.miniaturize(nil)
+  }
+
+  private func hideDockIcon() {
+    NSApp.setActivationPolicy(.accessory)
+  }
+
+  private func quitApp() {
+    NSApp.terminate(nil)
   }
 
   private func handleResetTap() {
