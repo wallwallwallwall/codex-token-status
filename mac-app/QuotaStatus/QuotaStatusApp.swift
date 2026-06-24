@@ -422,16 +422,7 @@ struct MetricCard: View {
         .lineLimit(1)
         .minimumScaleFactor(0.72)
 
-      HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
-        percentView
-        Spacer(minLength: 2 * scale)
-        Text(reset)
-          .font(.system(size: 15 * scale, weight: .semibold))
-          .foregroundStyle(Color.white.opacity(0.52))
-          .lineLimit(1)
-          .minimumScaleFactor(0.64)
-          .fixedSize(horizontal: true, vertical: false)
-      }
+      metricValueRow
     }
     .padding(.horizontal, 12 * scale)
     .padding(.vertical, 11 * scale)
@@ -482,6 +473,21 @@ struct MetricCard: View {
       .minimumScaleFactor(0.72)
       .layoutPriority(1)
       .fixedSize(horizontal: true, vertical: false)
+  }
+
+  private var metricValueRow: some View {
+    HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
+      percentView
+        .frame(minWidth: 52 * scale, alignment: .leading)
+
+      Text(reset)
+        .font(.system(size: 15 * scale, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.52))
+        .lineLimit(1)
+        .minimumScaleFactor(0.64)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
   }
 }
 
