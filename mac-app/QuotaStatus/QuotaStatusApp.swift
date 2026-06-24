@@ -235,6 +235,7 @@ struct QuotaPanelView: View {
 
           LiquidGauge(
             percent: model.primaryPercent,
+            remainingText: model.t(.remaining),
             palette: palette
           )
           .frame(width: gaugeSize, height: gaugeSize)
@@ -267,6 +268,9 @@ struct QuotaPanelView: View {
             scale: scale,
             isEnabled: model.canConsumeReset,
             helpText: model.resetButtonHelpText,
+            resetNowText: model.t(.resetNow),
+            noResetCreditsText: model.t(.noResetCredits),
+            defaultHelpText: model.t(.useOfficialReset),
             action: handleResetTap
           )
         }
@@ -325,7 +329,7 @@ struct QuotaPanelView: View {
 
       HStack(spacing: 8 * scale) {
         VStack(alignment: .trailing, spacing: 2 * scale) {
-          Text("计划")
+          Text(model.t(.plan))
             .font(.system(size: 9 * scale, weight: .medium))
             .foregroundStyle(Color.white.opacity(0.45))
           Text(model.planText)
@@ -345,19 +349,19 @@ struct QuotaPanelView: View {
       Button {
         minimizeWindow()
       } label: {
-        Label("最小化", systemImage: "minus")
+        Label(model.t(.minimize), systemImage: "minus")
       }
 
       Button {
         hideDockIcon()
       } label: {
-        Label("隐藏", systemImage: "dock.rectangle")
+        Label(model.t(.hideDockIcon), systemImage: "dock.rectangle")
       }
 
       Button {
         quitApp()
       } label: {
-        Label("退出", systemImage: "power")
+        Label(model.t(.quit), systemImage: "power")
       }
 
       Divider()
@@ -365,7 +369,7 @@ struct QuotaPanelView: View {
       Button {
         showingThemeSheet = true
       } label: {
-        Label("设置", systemImage: "slider.horizontal.3")
+        Label(model.t(.settingsTitle), systemImage: "slider.horizontal.3")
       }
     } label: {
       Image(systemName: "slider.horizontal.3")
@@ -381,7 +385,7 @@ struct QuotaPanelView: View {
     .buttonStyle(.plain)
     .controlSize(.small)
     .menuStyle(.button)
-    .help("打开窗口菜单")
+    .help(model.t(.openWindowMenu))
   }
 
   private func minimizeWindow() {
@@ -403,6 +407,7 @@ struct QuotaPanelView: View {
 
 struct LiquidGauge: View {
   let percent: Int
+  let remainingText: String
   let palette: Palette
 
   var body: some View {
@@ -482,7 +487,7 @@ struct LiquidGauge: View {
             .monospacedDigit()
             .minimumScaleFactor(0.68)
             .shadow(color: Color.black.opacity(0.14), radius: 4, x: 0, y: 2)
-          Text("剩余")
+          Text(remainingText)
             .font(.system(size: max(14, size * 0.10), weight: .semibold))
             .foregroundStyle(.white.opacity(0.78))
         }
@@ -536,6 +541,7 @@ struct MetricCard: View {
   var isButton: Bool = false
   var isEnabled: Bool = true
   var helpText: String? = nil
+  var defaultHelpText: String = "Use official reset"
   var action: (() -> Void)? = nil
 
   var body: some View {
@@ -568,7 +574,7 @@ struct MetricCard: View {
       .disabled(!isEnabled)
       .opacity(isEnabled ? 1 : 0.58)
       .contentShape(RoundedRectangle(cornerRadius: 16 * scale, style: .continuous))
-      .help(helpText ?? "使用官方重置功能")
+      .help(helpText ?? defaultHelpText)
     } else {
       card
     }
@@ -635,6 +641,9 @@ struct ResetActionCard: View {
   let scale: Double
   let isEnabled: Bool
   let helpText: String?
+  let resetNowText: String
+  let noResetCreditsText: String
+  let defaultHelpText: String
   let action: () -> Void
 
   var body: some View {
@@ -665,7 +674,7 @@ struct ResetActionCard: View {
             .font(.system(size: 24 * scale, weight: .semibold))
             .foregroundStyle(isEnabled ? palette.tone : Color.white.opacity(0.30))
 
-          Text(isEnabled ? "立即重置" : "暂无次数")
+          Text(isEnabled ? resetNowText : noResetCreditsText)
             .font(.system(size: 11 * scale, weight: .bold))
             .foregroundStyle(isEnabled ? Color.black.opacity(0.78) : Color.white.opacity(0.45))
             .padding(.vertical, 6 * scale)
@@ -704,7 +713,7 @@ struct ResetActionCard: View {
     .disabled(!isEnabled)
     .opacity(isEnabled ? 1 : 0.9)
     .contentShape(RoundedRectangle(cornerRadius: 18 * scale, style: .continuous))
-    .help(helpText ?? "使用官方重置功能")
+    .help(helpText ?? defaultHelpText)
   }
 }
 
@@ -720,107 +729,122 @@ struct ThemeSettingsSheet: View {
       VStack(alignment: .leading, spacing: 16) {
         HStack {
           VStack(alignment: .leading, spacing: 4) {
-            Text("设置")
+            Text(model.t(.settingsTitle))
               .font(.system(size: 22, weight: .black, design: .rounded))
-            Text("状态栏、通知和配色")
+            Text(model.t(.settingsSubtitle))
               .foregroundStyle(.secondary)
           }
           Spacer()
-          Button("完成") { dismiss() }
+          Button(model.t(.done)) { dismiss() }
         }
 
-        settingsSection("Token 数据刷新") {
-          Text("默认 30 秒，从本机 Codex 读取 token 数据。")
+        settingsSection(model.t(.languageSection)) {
+          Picker(model.t(.languagePicker), selection: Binding(
+            get: { model.appLanguage },
+            set: { model.setAppLanguage($0) }
+          )) {
+            Text("English").tag(AppLanguage.english)
+            Text("中文").tag(AppLanguage.chinese)
+          }
+          .pickerStyle(.segmented)
+
+          Text(model.t(.languageDescription))
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+        }
+
+        settingsSection(model.t(.tokenRefreshSection)) {
+          Text(model.t(.tokenRefreshDescription))
             .font(.system(size: 13, weight: .semibold, design: .rounded))
             .foregroundStyle(.secondary)
 
-          Picker("刷新间隔", selection: Binding(
+          Picker(model.t(.refreshInterval), selection: Binding(
             get: { model.refreshIntervalMode },
             set: { model.setRefreshIntervalMode($0) }
           )) {
-            Text("30 秒").tag(RefreshIntervalMode.seconds30)
-            Text("1 分钟").tag(RefreshIntervalMode.minute1)
-            Text("5 分钟").tag(RefreshIntervalMode.minute5)
-            Text("自定义").tag(RefreshIntervalMode.custom)
+            Text(model.t(.interval30Seconds)).tag(RefreshIntervalMode.seconds30)
+            Text(model.t(.interval1Minute)).tag(RefreshIntervalMode.minute1)
+            Text(model.t(.interval5Minutes)).tag(RefreshIntervalMode.minute5)
+            Text(model.t(.custom)).tag(RefreshIntervalMode.custom)
           }
           .pickerStyle(.segmented)
 
           if model.refreshIntervalMode == .custom {
             HStack(spacing: 10) {
-              Text("自定义间隔")
-              TextField("秒", value: Binding(
+              Text(model.t(.customInterval))
+              TextField(model.t(.secondsUnit), value: Binding(
                 get: { model.refreshIntervalCustomSeconds },
                 set: { model.setRefreshIntervalCustomSeconds($0) }
               ), format: .number)
               .textFieldStyle(.roundedBorder)
               .frame(width: 88)
-              Text("秒")
+              Text(model.t(.secondsUnit))
               Spacer()
             }
 
-            Text("支持 10 秒到 86400 秒。当前每 \(model.refreshIntervalDisplayText) 读取一次。")
+            Text(model.refreshIntervalHelpText)
               .font(.system(size: 12, weight: .semibold, design: .rounded))
               .foregroundStyle(.secondary)
           } else {
-            Text("当前每 \(model.refreshIntervalDisplayText) 读取一次。")
+            Text(model.refreshIntervalSummaryText)
               .font(.system(size: 12, weight: .semibold, design: .rounded))
               .foregroundStyle(.secondary)
           }
         }
 
-        settingsSection("状态栏") {
+        settingsSection(model.t(.statusBarSection)) {
           HStack(spacing: 16) {
-            Toggle("显示倒计时", isOn: Binding(
+            Toggle(model.t(.showCountdown), isOn: Binding(
               get: { model.statusBarShowsCountdown },
               set: { model.setStatusBarShowsCountdown($0) }
             ))
 
-            Toggle("显示重置时间", isOn: Binding(
+            Toggle(model.t(.showResetTime), isOn: Binding(
               get: { model.statusBarShowsResetTime },
               set: { model.setStatusBarShowsResetTime($0) }
             ))
           }
 
-          Picker("倒计时来源", selection: Binding(
+          Picker(model.t(.countdownSource), selection: Binding(
             get: { model.statusBarCountdownTarget },
             set: { model.setStatusBarCountdownTarget($0) }
           )) {
-            Text("5小时倒计时").tag(CountdownTarget.fiveHour)
-            Text("7天倒计时").tag(CountdownTarget.sevenDay)
+            Text(model.t(.fiveHourCountdown)).tag(CountdownTarget.fiveHour)
+            Text(model.t(.sevenDayCountdown)).tag(CountdownTarget.sevenDay)
           }
           .pickerStyle(.segmented)
           .disabled(!model.statusBarShowsCountdown)
 
-          Picker("重置时间来源", selection: Binding(
+          Picker(model.t(.resetTimeSource), selection: Binding(
             get: { model.statusBarResetTimeTarget },
             set: { model.setStatusBarResetTimeTarget($0) }
           )) {
-            Text("5小时重置").tag(CountdownTarget.fiveHour)
-            Text("7天重置").tag(CountdownTarget.sevenDay)
+            Text(model.t(.fiveHourReset)).tag(CountdownTarget.fiveHour)
+            Text(model.t(.sevenDayReset)).tag(CountdownTarget.sevenDay)
           }
           .pickerStyle(.segmented)
           .disabled(!model.statusBarShowsResetTime)
         }
 
-        settingsSection("通知提醒") {
-          Toggle("开启通知提醒", isOn: Binding(
+        settingsSection(model.t(.notificationsSection)) {
+          Toggle(model.t(.enableNotifications), isOn: Binding(
             get: { model.notificationsEnabled },
             set: { model.setNotificationsEnabled($0) }
           ))
 
-          Toggle("5小时剩余 50%", isOn: Binding(
+          Toggle(model.t(.notify50), isOn: Binding(
             get: { model.notificationEnabled(for: .fifty) },
             set: { model.setNotificationThreshold(.fifty, enabled: $0) }
           ))
           .disabled(!model.notificationsEnabled)
 
-          Toggle("5小时剩余 20%", isOn: Binding(
+          Toggle(model.t(.notify20), isOn: Binding(
             get: { model.notificationEnabled(for: .twenty) },
             set: { model.setNotificationThreshold(.twenty, enabled: $0) }
           ))
           .disabled(!model.notificationsEnabled)
 
-          Toggle("5小时剩余 5%", isOn: Binding(
+          Toggle(model.t(.notify5), isOn: Binding(
             get: { model.notificationEnabled(for: .five) },
             set: { model.setNotificationThreshold(.five, enabled: $0) }
           ))
@@ -856,25 +880,25 @@ struct ThemeSettingsSheet: View {
             Text("Custom")
               .font(.system(size: 16, weight: .black, design: .rounded))
 
-            colorPickerRow("背景上层", color: themeStore.binding(for: \.backgroundTop))
-            colorPickerRow("背景下层", color: themeStore.binding(for: \.backgroundBottom))
-            colorPickerRow("面板上层", color: themeStore.binding(for: \.panelTop))
-            colorPickerRow("面板下层", color: themeStore.binding(for: \.panelBottom))
-            colorPickerRow("强调色", color: themeStore.binding(for: \.accent))
-            colorPickerRow("液体上层", color: themeStore.binding(for: \.liquidTop))
-            colorPickerRow("液体中层", color: themeStore.binding(for: \.liquidMid))
-            colorPickerRow("液体下层", color: themeStore.binding(for: \.liquidBottom))
+            colorPickerRow(model.t(.backgroundTop), color: themeStore.binding(for: \.backgroundTop))
+            colorPickerRow(model.t(.backgroundBottom), color: themeStore.binding(for: \.backgroundBottom))
+            colorPickerRow(model.t(.panelTop), color: themeStore.binding(for: \.panelTop))
+            colorPickerRow(model.t(.panelBottom), color: themeStore.binding(for: \.panelBottom))
+            colorPickerRow(model.t(.accentColor), color: themeStore.binding(for: \.accent))
+            colorPickerRow(model.t(.liquidTop), color: themeStore.binding(for: \.liquidTop))
+            colorPickerRow(model.t(.liquidMid), color: themeStore.binding(for: \.liquidMid))
+            colorPickerRow(model.t(.liquidBottom), color: themeStore.binding(for: \.liquidBottom))
 
-            Button("恢复默认 Custom 配色") {
+            Button(model.t(.restoreCustomColors)) {
               themeStore.resetCustomColors()
             }
             .buttonStyle(.bordered)
           }
         } else {
           VStack(alignment: .leading, spacing: 6) {
-            Text("当前模板")
+            Text(model.t(.currentTheme))
               .font(.system(size: 16, weight: .black, design: .rounded))
-            Text("切到 Custom 后可以分别自定义背景、面板、液体和强调色。")
+            Text(model.t(.customThemeDescription))
               .foregroundStyle(.secondary)
           }
         }
@@ -953,6 +977,87 @@ enum NotificationThreshold: Int, CaseIterable, Identifiable {
   var id: Int { rawValue }
 }
 
+enum AppLanguage: String, CaseIterable, Identifiable {
+  case english
+  case chinese
+
+  var id: String { rawValue }
+}
+
+enum LocalizedTextKey {
+  case settingsTitle
+  case settingsSubtitle
+  case done
+  case languageSection
+  case languagePicker
+  case languageDescription
+  case tokenRefreshSection
+  case tokenRefreshDescription
+  case refreshInterval
+  case interval30Seconds
+  case interval1Minute
+  case interval5Minutes
+  case custom
+  case customInterval
+  case secondsUnit
+  case statusBarSection
+  case showCountdown
+  case showResetTime
+  case countdownSource
+  case resetTimeSource
+  case fiveHourCountdown
+  case sevenDayCountdown
+  case fiveHourReset
+  case sevenDayReset
+  case notificationsSection
+  case enableNotifications
+  case notify50
+  case notify20
+  case notify5
+  case currentTheme
+  case customThemeDescription
+  case backgroundTop
+  case backgroundBottom
+  case panelTop
+  case panelBottom
+  case accentColor
+  case liquidTop
+  case liquidMid
+  case liquidBottom
+  case restoreCustomColors
+  case remaining
+  case plan
+  case minimize
+  case hideDockIcon
+  case quit
+  case openWindowMenu
+  case useOfficialReset
+  case resetNow
+  case noResetCredits
+  case loading
+  case fiveHourWindow
+  case sevenDayWindow
+  case remainingResetCredits
+  case greenLight
+  case yellowLight
+  case redLight
+  case resetting
+  case readFailedKeepingLastData
+  case codexReadFailed
+  case quotaNotRead
+  case codexReadTimedOut
+  case officialResetFailedRetry
+  case usingOfficialReset
+  case officialNotProvided
+  case availableNow
+  case temporarilyUnavailable
+  case callingOfficialReset
+  case officialResetNotReturned
+  case clickOfficialReset
+  case noAvailableResetCredits
+  case notificationTitle
+}
+
 @MainActor
 final class QuotaViewModel: ObservableObject {
   static let shared = QuotaViewModel()
@@ -964,6 +1069,7 @@ final class QuotaViewModel: ObservableObject {
   private static let resetTimeTargetKey = "QuotaStatus.statusBar.resetTimeTarget"
   private static let refreshIntervalModeKey = "QuotaStatus.refresh.intervalMode"
   private static let refreshIntervalCustomSecondsKey = "QuotaStatus.refresh.customSeconds"
+  private static let languageKey = "QuotaStatus.language"
   private static let displayCacheKey = "QuotaStatus.display.cache"
   private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
   private static let notify50Key = "QuotaStatus.notifications.threshold50"
@@ -971,24 +1077,25 @@ final class QuotaViewModel: ObservableObject {
   private static let notify5Key = "QuotaStatus.notifications.threshold5"
 
   @Published var title = "Mac Codex"
-  @Published var signalText = "读取中"
+  @Published var signalText = "Loading"
   @Published var planText = "--"
   @Published var primaryPercent = 0
-  @Published var shortLabel = "5小时窗口"
+  @Published var shortLabel = "5-hour window"
   @Published var shortPercentText = "--"
   @Published var shortResetText = "--"
-  @Published var weeklyLabel = "7天窗口"
+  @Published var weeklyLabel = "7-day window"
   @Published var weeklyPercentText = "--"
   @Published var weeklyResetText = "--"
-  @Published var resetLabel = "剩余重置次数"
+  @Published var resetLabel = "Remaining reset credits"
   @Published var resetCountText = "--"
   @Published var resetAvailableText = "--"
-  @Published var resetButtonHelpText = "读取中"
+  @Published var resetButtonHelpText = "Loading"
   @Published var canConsumeReset = false
   @Published var isResetting = false
   @Published var stale = false
   @Published var statusBarTitle = "CodeX\u{00A0}--|--"
   @Published var statusBarCountdownText = ""
+  @Published var appLanguage = AppLanguage(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.languageKey) ?? "") ?? .english
   @Published var statusBarShowsCountdown = QuotaViewModel.storedBool(QuotaViewModel.showsCountdownKey, defaultValue: false)
   @Published var statusBarShowsResetTime = QuotaViewModel.storedBool(QuotaViewModel.showsResetTimeKey, defaultValue: false)
   @Published var statusBarCountdownTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.countdownTargetKey) ?? "") ?? .fiveHour
@@ -1036,6 +1143,36 @@ final class QuotaViewModel: ObservableObject {
     countdownTimer?.invalidate()
   }
 
+  func t(_ key: LocalizedTextKey) -> String {
+    Self.localized(key, language: appLanguage)
+  }
+
+  func setAppLanguage(_ language: AppLanguage) {
+    appLanguage = language
+    Self.defaults.set(language.rawValue, forKey: Self.languageKey)
+    relocalizeCurrentDisplayText()
+    refreshStatusBarDisplay()
+    saveDisplayCache()
+  }
+
+  var refreshIntervalSummaryText: String {
+    switch appLanguage {
+    case .english:
+      return "Currently reads every \(refreshIntervalDisplayText)."
+    case .chinese:
+      return "当前每 \(refreshIntervalDisplayText) 读取一次。"
+    }
+  }
+
+  var refreshIntervalHelpText: String {
+    switch appLanguage {
+    case .english:
+      return "Supports 10 seconds to 86400 seconds. Currently reads every \(refreshIntervalDisplayText)."
+    case .chinese:
+      return "支持 10 秒到 86400 秒。当前每 \(refreshIntervalDisplayText) 读取一次。"
+    }
+  }
+
   private func load() {
     Task { await fetchStatus() }
   }
@@ -1048,13 +1185,14 @@ final class QuotaViewModel: ObservableObject {
       }
       apply(snapshot)
     } catch {
+      let message = localizedFetchMessage(error)
       stale = true
       if hasDisplayData {
-        signalText = "读取失败，保留上次数据"
-        resetButtonHelpText = sanitizeFetchMessage(error.userFacingMessage)
+        signalText = t(.readFailedKeepingLastData)
+        resetButtonHelpText = message
         refreshStatusBarDisplay()
       } else {
-        signalText = sanitizeFetchMessage(error.userFacingMessage)
+        signalText = message
       }
     }
   }
@@ -1073,15 +1211,15 @@ final class QuotaViewModel: ObservableObject {
     weeklyResetDate = weekly?.resetDate
     shortRemainingPercent = short.map { clamp($0.percent ?? 0) }
 
-    shortLabel = labelForWindow(short?.label, fallback: "5小时窗口")
+    shortLabel = labelForWindow(short?.label, fallback: t(.fiveHourWindow))
     shortPercentText = percentText(short)
     shortResetText = resetText(short)
-    weeklyLabel = labelForWindow(weekly?.label, fallback: "7天窗口")
+    weeklyLabel = labelForWindow(weekly?.label, fallback: t(.sevenDayWindow))
     weeklyPercentText = percentText(weekly)
     weeklyResetText = resetText(weekly)
     refreshStatusBarDisplay()
     sendThresholdNotificationsIfNeeded()
-    resetLabel = "剩余重置次数"
+    resetLabel = t(.remainingResetCredits)
     resetCountText = resetCount(snapshot.rateLimitResetCredits)
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
     canConsumeReset = (snapshot.rateLimitResetCredits?.availableCount ?? 0) > 0 && !isResetting
@@ -1094,7 +1232,7 @@ final class QuotaViewModel: ObservableObject {
 
     isResetting = true
     canConsumeReset = false
-    signalText = "正在重置"
+    signalText = t(.resetting)
 
     do {
       _ = try await CodexRateLimitReader(command: codexCommand).consumeResetCredit()
@@ -1104,9 +1242,9 @@ final class QuotaViewModel: ObservableObject {
     } catch {
       isResetting = false
       stale = true
-      signalText = sanitizeFetchMessage(error.userFacingMessage)
+      signalText = localizedFetchMessage(error)
       canConsumeReset = true
-      resetButtonHelpText = "官方重置失败，点击重试"
+      resetButtonHelpText = t(.officialResetFailedRetry)
     }
   }
 
@@ -1148,7 +1286,7 @@ final class QuotaViewModel: ObservableObject {
   }
 
   var refreshIntervalDisplayText: String {
-    Self.refreshIntervalText(Int(statusRefreshIntervalSeconds))
+    Self.refreshIntervalText(Int(statusRefreshIntervalSeconds), language: appLanguage)
   }
 
   func setRefreshIntervalMode(_ mode: RefreshIntervalMode) {
@@ -1282,6 +1420,7 @@ final class QuotaViewModel: ObservableObject {
     resetButtonHelpText = cache.resetButtonHelpText
     canConsumeReset = false
     stale = false
+    relocalizeCurrentDisplayText()
     refreshStatusBarDisplay()
   }
 
@@ -1307,6 +1446,69 @@ final class QuotaViewModel: ObservableObject {
     }
   }
 
+  private func relocalizeCurrentDisplayText() {
+    title = displayTitle
+
+    if Self.matchesAnyLocalized(shortLabel, keys: [.fiveHourWindow]) {
+      shortLabel = t(.fiveHourWindow)
+    }
+    if Self.matchesAnyLocalized(weeklyLabel, keys: [.sevenDayWindow]) {
+      weeklyLabel = t(.sevenDayWindow)
+    }
+    if Self.matchesAnyLocalized(resetLabel, keys: [.remainingResetCredits]) {
+      resetLabel = t(.remainingResetCredits)
+    }
+    if let count = Self.resetCountValue(from: resetCountText) {
+      resetCountText = resetCountText(for: count)
+    }
+
+    signalText = relocalizedSignalText(signalText)
+    resetAvailableText = relocalizedResetAvailabilityText(resetAvailableText)
+    resetButtonHelpText = relocalizedResetHelpText(resetButtonHelpText)
+  }
+
+  private func relocalizedSignalText(_ text: String) -> String {
+    if Self.matchesAnyLocalized(text, keys: [.loading]) { return t(.loading) }
+    if Self.matchesAnyLocalized(text, keys: [.greenLight]) { return t(.greenLight) }
+    if Self.matchesAnyLocalized(text, keys: [.yellowLight]) { return t(.yellowLight) }
+    if Self.matchesAnyLocalized(text, keys: [.redLight]) { return t(.redLight) }
+    if Self.matchesAnyLocalized(text, keys: [.resetting]) { return t(.resetting) }
+    if Self.matchesAnyLocalized(text, keys: [.readFailedKeepingLastData]) { return t(.readFailedKeepingLastData) }
+    return text
+  }
+
+  private func relocalizedResetAvailabilityText(_ text: String) -> String {
+    if Self.matchesAnyLocalized(text, keys: [.usingOfficialReset]) { return t(.usingOfficialReset) }
+    if Self.matchesAnyLocalized(text, keys: [.officialNotProvided]) { return t(.officialNotProvided) }
+    if Self.matchesAnyLocalized(text, keys: [.availableNow]) { return t(.availableNow) }
+    if Self.matchesAnyLocalized(text, keys: [.temporarilyUnavailable]) { return t(.temporarilyUnavailable) }
+    return text
+  }
+
+  private func relocalizedResetHelpText(_ text: String) -> String {
+    if Self.matchesAnyLocalized(text, keys: [.loading]) { return t(.loading) }
+    if Self.matchesAnyLocalized(text, keys: [.callingOfficialReset]) { return t(.callingOfficialReset) }
+    if Self.matchesAnyLocalized(text, keys: [.officialResetNotReturned]) { return t(.officialResetNotReturned) }
+    if Self.matchesAnyLocalized(text, keys: [.clickOfficialReset]) { return t(.clickOfficialReset) }
+    if Self.matchesAnyLocalized(text, keys: [.noAvailableResetCredits]) { return t(.noAvailableResetCredits) }
+    if Self.matchesAnyLocalized(text, keys: [.officialResetFailedRetry]) { return t(.officialResetFailedRetry) }
+    return text
+  }
+
+  private func localizedFetchMessage(_ error: Error) -> String {
+    if let fetchError = error as? FetchError {
+      switch fetchError {
+      case .missingRateLimits:
+        return t(.quotaNotRead)
+      case .timeout:
+        return t(.codexReadTimedOut)
+      case .codexProcess(let message):
+        return sanitizeFetchMessage(message.isEmpty ? t(.codexReadFailed) : message)
+      }
+    }
+    return sanitizeFetchMessage(error.userFacingMessage)
+  }
+
   private func sanitizeFetchMessage(_ message: String) -> String {
     let withoutEscape = message.replacingOccurrences(of: "\u{001B}", with: "")
     let withoutAnsi = withoutEscape.replacingOccurrences(
@@ -1317,9 +1519,9 @@ final class QuotaViewModel: ObservableObject {
     let firstLine = withoutAnsi
       .split(whereSeparator: \.isNewline)
       .first
-      .map(String.init) ?? "Codex 读取失败"
+      .map(String.init) ?? t(.codexReadFailed)
     let trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { return "Codex 读取失败" }
+    guard !trimmed.isEmpty else { return t(.codexReadFailed) }
     if trimmed.count > 34 {
       return "\(trimmed.prefix(34))..."
     }
@@ -1338,7 +1540,7 @@ final class QuotaViewModel: ObservableObject {
     let resetText: String
     if let resetsAt = window?.resetsAt {
       let resetDate = Date(timeIntervalSince1970: resetsAt)
-      resetText = resetKind == .time ? Self.clockFormatter.string(from: resetDate) : Self.monthDayFormatter.string(from: resetDate)
+      resetText = resetDateText(for: resetDate, resetKind: resetKind)
     } else {
       resetText = ""
     }
@@ -1350,6 +1552,18 @@ final class QuotaViewModel: ObservableObject {
       resetAt: nil,
       resetDate: window?.resetsAt.map { Date(timeIntervalSince1970: $0) }
     )
+  }
+
+  private func resetDateText(for resetDate: Date, resetKind: ResetKind) -> String {
+    if resetKind == .time {
+      return Self.clockFormatter.string(from: resetDate)
+    }
+    switch appLanguage {
+    case .english:
+      return Self.englishMonthDayFormatter.string(from: resetDate)
+    case .chinese:
+      return Self.chineseMonthDayFormatter.string(from: resetDate)
+    }
   }
 
   private func countdownText(until resetDate: Date?, target: CountdownTarget) -> String {
@@ -1391,8 +1605,14 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func sendNotification(for threshold: NotificationThreshold, currentPercent: Int) {
-    let title = "CodeX 5小时额度提醒"
-    let body = "5小时剩余额度已到 \(threshold.rawValue)%，当前剩余 \(currentPercent)%"
+    let title = t(.notificationTitle)
+    let body: String
+    switch appLanguage {
+    case .english:
+      body = "5-hour remaining quota reached \(threshold.rawValue)%. Current remaining: \(currentPercent)%."
+    case .chinese:
+      body = "5小时剩余额度已到 \(threshold.rawValue)%，当前剩余 \(currentPercent)%"
+    }
     let content = UNMutableNotificationContent()
     content.title = title
     content.body = body
@@ -1433,8 +1653,8 @@ final class QuotaViewModel: ObservableObject {
 
   private func labelForWindow(_ label: String?, fallback: String) -> String {
     guard let label, !label.isEmpty else { return fallback }
-    if label.lowercased() == "weekly" { return "7天窗口" }
-    if label.lowercased() == "5h" { return "5小时窗口" }
+    if label.lowercased() == "weekly" { return t(.sevenDayWindow) }
+    if label.lowercased() == "5h" { return t(.fiveHourWindow) }
     return label
   }
 
@@ -1461,26 +1681,35 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func signalFor(_ percent: Int) -> String {
-    if percent < 20 { return "红灯" }
-    if percent < 50 { return "黄灯" }
-    return "绿灯"
+    if percent < 20 { return t(.redLight) }
+    if percent < 50 { return t(.yellowLight) }
+    return t(.greenLight)
   }
 
   private func resetCount(_ credits: CodexRateLimitResetCredits?) -> String {
     guard let count = credits?.availableCount else { return "--" }
-    return "剩余重置次数 \(count)"
+    return resetCountText(for: count)
+  }
+
+  private func resetCountText(for count: Int) -> String {
+    switch appLanguage {
+    case .english:
+      return "Remaining reset credits \(count)"
+    case .chinese:
+      return "剩余重置次数 \(count)"
+    }
   }
 
   private func resetAvailability(_ credits: CodexRateLimitResetCredits?) -> String {
-    if isResetting { return "正在使用官方重置" }
-    guard let count = credits?.availableCount else { return "官方未提供" }
-    return count > 0 ? "当前可立即使用" : "当前暂不可用"
+    if isResetting { return t(.usingOfficialReset) }
+    guard let count = credits?.availableCount else { return t(.officialNotProvided) }
+    return count > 0 ? t(.availableNow) : t(.temporarilyUnavailable)
   }
 
   private func resetHelpText(_ credits: CodexRateLimitResetCredits?) -> String {
-    if isResetting { return "正在调用官方重置" }
-    guard let count = credits?.availableCount else { return "官方暂未返回重置能力" }
-    return count > 0 ? "点击使用官方重置次数" : "当前没有可用重置次数"
+    if isResetting { return t(.callingOfficialReset) }
+    guard let count = credits?.availableCount else { return t(.officialResetNotReturned) }
+    return count > 0 ? t(.clickOfficialReset) : t(.noAvailableResetCredits)
   }
 
   private func clamp(_ value: Double) -> Int {
@@ -1499,21 +1728,203 @@ final class QuotaViewModel: ObservableObject {
     return clampRefreshIntervalSeconds(defaults.integer(forKey: refreshIntervalCustomSecondsKey))
   }
 
+  private static func matchesAnyLocalized(_ value: String, keys: [LocalizedTextKey]) -> Bool {
+    keys.contains { key in
+      value == localized(key, language: .english) || value == localized(key, language: .chinese)
+    }
+  }
+
+  private static func resetCountValue(from text: String) -> Int? {
+    text
+      .split(separator: " ")
+      .last
+      .flatMap { Int($0) }
+  }
+
   private static func clampRefreshIntervalSeconds(_ seconds: Int) -> Int {
     min(86_400, max(10, seconds))
   }
 
-  private static func refreshIntervalText(_ seconds: Int) -> String {
-    if seconds < 60 {
+  private static func refreshIntervalText(_ seconds: Int, language: AppLanguage) -> String {
+    switch language {
+    case .english:
+      if seconds < 60 {
+        return "\(seconds) seconds"
+      }
+      if seconds % 3600 == 0 {
+        let hours = seconds / 3600
+        return hours == 1 ? "1 hour" : "\(hours) hours"
+      }
+      if seconds % 60 == 0 {
+        let minutes = seconds / 60
+        return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+      }
+      return "\(seconds) seconds"
+    case .chinese:
+      if seconds < 60 {
+        return "\(seconds) 秒"
+      }
+      if seconds % 3600 == 0 {
+        return "\(seconds / 3600) 小时"
+      }
+      if seconds % 60 == 0 {
+        return "\(seconds / 60) 分钟"
+      }
       return "\(seconds) 秒"
     }
-    if seconds % 3600 == 0 {
-      return "\(seconds / 3600) 小时"
+  }
+
+  private static func localized(_ key: LocalizedTextKey, language: AppLanguage) -> String {
+    switch language {
+    case .english:
+      switch key {
+      case .settingsTitle: return "Settings"
+      case .settingsSubtitle: return "Status bar, notifications, colors and language"
+      case .done: return "Done"
+      case .languageSection: return "Language"
+      case .languagePicker: return "Language"
+      case .languageDescription: return "Default is English. Switching language only changes local display text."
+      case .tokenRefreshSection: return "Token Data Refresh"
+      case .tokenRefreshDescription: return "Default 30 seconds, reading token data from local Codex."
+      case .refreshInterval: return "Refresh interval"
+      case .interval30Seconds: return "30 seconds"
+      case .interval1Minute: return "1 minute"
+      case .interval5Minutes: return "5 minutes"
+      case .custom: return "Custom"
+      case .customInterval: return "Custom interval"
+      case .secondsUnit: return "seconds"
+      case .statusBarSection: return "Status Bar"
+      case .showCountdown: return "Show countdown"
+      case .showResetTime: return "Show reset time"
+      case .countdownSource: return "Countdown source"
+      case .resetTimeSource: return "Reset time source"
+      case .fiveHourCountdown: return "5-hour countdown"
+      case .sevenDayCountdown: return "7-day countdown"
+      case .fiveHourReset: return "5-hour reset"
+      case .sevenDayReset: return "7-day reset"
+      case .notificationsSection: return "Notifications"
+      case .enableNotifications: return "Enable notifications"
+      case .notify50: return "5-hour remaining 50%"
+      case .notify20: return "5-hour remaining 20%"
+      case .notify5: return "5-hour remaining 5%"
+      case .currentTheme: return "Current theme"
+      case .customThemeDescription: return "Switch to Custom to adjust background, panel, liquid and accent colors."
+      case .backgroundTop: return "Background top"
+      case .backgroundBottom: return "Background bottom"
+      case .panelTop: return "Panel top"
+      case .panelBottom: return "Panel bottom"
+      case .accentColor: return "Accent color"
+      case .liquidTop: return "Liquid top"
+      case .liquidMid: return "Liquid middle"
+      case .liquidBottom: return "Liquid bottom"
+      case .restoreCustomColors: return "Restore default Custom colors"
+      case .remaining: return "Remaining"
+      case .plan: return "Plan"
+      case .minimize: return "Minimize"
+      case .hideDockIcon: return "Hide Dock icon"
+      case .quit: return "Quit"
+      case .openWindowMenu: return "Open window menu"
+      case .useOfficialReset: return "Use official reset"
+      case .resetNow: return "Reset now"
+      case .noResetCredits: return "No credits"
+      case .loading: return "Loading"
+      case .fiveHourWindow: return "5-hour window"
+      case .sevenDayWindow: return "7-day window"
+      case .remainingResetCredits: return "Remaining reset credits"
+      case .greenLight: return "Green light"
+      case .yellowLight: return "Yellow light"
+      case .redLight: return "Red light"
+      case .resetting: return "Resetting"
+      case .readFailedKeepingLastData: return "Read failed, keeping last data"
+      case .codexReadFailed: return "Codex read failed"
+      case .quotaNotRead: return "Quota not read"
+      case .codexReadTimedOut: return "Codex read timed out"
+      case .officialResetFailedRetry: return "Official reset failed, click to retry"
+      case .usingOfficialReset: return "Using official reset"
+      case .officialNotProvided: return "Not provided by official API"
+      case .availableNow: return "Available now"
+      case .temporarilyUnavailable: return "Temporarily unavailable"
+      case .callingOfficialReset: return "Calling official reset"
+      case .officialResetNotReturned: return "Official reset ability not returned"
+      case .clickOfficialReset: return "Click to use official reset credit"
+      case .noAvailableResetCredits: return "No available reset credits"
+      case .notificationTitle: return "CodeX 5-hour quota reminder"
+      }
+    case .chinese:
+      switch key {
+      case .settingsTitle: return "设置"
+      case .settingsSubtitle: return "状态栏、通知和配色"
+      case .done: return "完成"
+      case .languageSection: return "语言"
+      case .languagePicker: return "语言"
+      case .languageDescription: return "默认使用英语。切换语言只影响本地显示文案。"
+      case .tokenRefreshSection: return "Token 数据刷新"
+      case .tokenRefreshDescription: return "默认 30 秒，从本机 Codex 读取 token 数据。"
+      case .refreshInterval: return "刷新间隔"
+      case .interval30Seconds: return "30 秒"
+      case .interval1Minute: return "1 分钟"
+      case .interval5Minutes: return "5 分钟"
+      case .custom: return "自定义"
+      case .customInterval: return "自定义间隔"
+      case .secondsUnit: return "秒"
+      case .statusBarSection: return "状态栏"
+      case .showCountdown: return "显示倒计时"
+      case .showResetTime: return "显示重置时间"
+      case .countdownSource: return "倒计时来源"
+      case .resetTimeSource: return "重置时间来源"
+      case .fiveHourCountdown: return "5小时倒计时"
+      case .sevenDayCountdown: return "7天倒计时"
+      case .fiveHourReset: return "5小时重置"
+      case .sevenDayReset: return "7天重置"
+      case .notificationsSection: return "通知提醒"
+      case .enableNotifications: return "开启通知提醒"
+      case .notify50: return "5小时剩余 50%"
+      case .notify20: return "5小时剩余 20%"
+      case .notify5: return "5小时剩余 5%"
+      case .currentTheme: return "当前模板"
+      case .customThemeDescription: return "切到 Custom 后可以分别自定义背景、面板、液体和强调色。"
+      case .backgroundTop: return "背景上层"
+      case .backgroundBottom: return "背景下层"
+      case .panelTop: return "面板上层"
+      case .panelBottom: return "面板下层"
+      case .accentColor: return "强调色"
+      case .liquidTop: return "液体上层"
+      case .liquidMid: return "液体中层"
+      case .liquidBottom: return "液体下层"
+      case .restoreCustomColors: return "恢复默认 Custom 配色"
+      case .remaining: return "剩余"
+      case .plan: return "计划"
+      case .minimize: return "最小化"
+      case .hideDockIcon: return "隐藏"
+      case .quit: return "退出"
+      case .openWindowMenu: return "打开窗口菜单"
+      case .useOfficialReset: return "使用官方重置功能"
+      case .resetNow: return "立即重置"
+      case .noResetCredits: return "暂无次数"
+      case .loading: return "读取中"
+      case .fiveHourWindow: return "5小时窗口"
+      case .sevenDayWindow: return "7天窗口"
+      case .remainingResetCredits: return "剩余重置次数"
+      case .greenLight: return "绿灯"
+      case .yellowLight: return "黄灯"
+      case .redLight: return "红灯"
+      case .resetting: return "正在重置"
+      case .readFailedKeepingLastData: return "读取失败，保留上次数据"
+      case .codexReadFailed: return "Codex 读取失败"
+      case .quotaNotRead: return "未读取到额度"
+      case .codexReadTimedOut: return "Codex 读取超时"
+      case .officialResetFailedRetry: return "官方重置失败，点击重试"
+      case .usingOfficialReset: return "正在使用官方重置"
+      case .officialNotProvided: return "官方未提供"
+      case .availableNow: return "当前可立即使用"
+      case .temporarilyUnavailable: return "当前暂不可用"
+      case .callingOfficialReset: return "正在调用官方重置"
+      case .officialResetNotReturned: return "官方暂未返回重置能力"
+      case .clickOfficialReset: return "点击使用官方重置次数"
+      case .noAvailableResetCredits: return "当前没有可用重置次数"
+      case .notificationTitle: return "CodeX 5小时额度提醒"
+      }
     }
-    if seconds % 60 == 0 {
-      return "\(seconds / 60) 分钟"
-    }
-    return "\(seconds) 秒"
   }
 
   private static func argumentValue(_ name: String) -> String? {
@@ -1536,10 +1947,17 @@ final class QuotaViewModel: ObservableObject {
     return formatter
   }()
 
-  private static let monthDayFormatter: DateFormatter = {
+  private static let chineseMonthDayFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "zh_CN")
     formatter.dateFormat = "M月d日"
+    return formatter
+  }()
+
+  private static let englishMonthDayFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "MMM d"
     return formatter
   }()
 }
