@@ -67,39 +67,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let hasCountdown = !countdown.isEmpty
     let countdownPrefix = hasCountdown ? statusBarCountdownPrefix(for: title) : ""
     let visibleCountdown = hasCountdown ? "\(countdownPrefix)\(countdown)" : ""
-    let topLineFontSize: CGFloat = hasCountdown ? 10.0 : NSFont.systemFontSize
-    let countdownFontSize: CGFloat = 8.8
+    let topLineFontSize: CGFloat = hasCountdown ? 9.2 : NSFont.systemFontSize
+    let countdownFontSize: CGFloat = 8.4
+    let titleFont = NSFont.monospacedSystemFont(ofSize: topLineFontSize, weight: .bold)
+    let countdownFont = NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold)
 
     let paragraphStyle = NSMutableParagraphStyle()
     paragraphStyle.lineBreakMode = .byClipping
     paragraphStyle.alignment = .left
+    paragraphStyle.lineSpacing = -3.0
 
     let text = hasCountdown ? "\(title)\n\(visibleCountdown)" : title
     let attributed = NSMutableAttributedString(
       string: text,
       attributes: [
+        .baselineOffset: hasCountdown ? -1.0 : 0,
         .foregroundColor: NSColor.labelColor,
         .paragraphStyle: paragraphStyle,
       ]
     )
     let titleLength = (title as NSString).length
     attributed.addAttributes(
-      [.font: NSFont.monospacedSystemFont(ofSize: topLineFontSize, weight: .bold)],
+      [.font: titleFont],
       range: NSRange(location: 0, length: titleLength)
     )
+
     if hasCountdown {
+      let prefixLength = (countdownPrefix as NSString).length
+      let countdownLength = (countdown as NSString).length
       attributed.addAttributes(
-        [
-          .font: NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold),
-          .foregroundColor: NSColor.labelColor,
-        ],
-        range: NSRange(location: titleLength + 1, length: (visibleCountdown as NSString).length)
+        [.font: titleFont],
+        range: NSRange(location: titleLength + 1, length: prefixLength)
+      )
+      attributed.addAttributes(
+        [.font: countdownFont],
+        range: NSRange(location: titleLength + 1 + prefixLength, length: countdownLength)
       )
     }
 
-    let longestLineLength = max((title as NSString).length, (visibleCountdown as NSString).length)
-    item.length = max(116, CGFloat(longestLineLength) * (hasCountdown ? 7.4 : 8.4))
+    let titleWidth = (title as NSString).size(withAttributes: [.font: titleFont]).width
+    let countdownWidth = (countdownPrefix as NSString).size(withAttributes: [.font: titleFont]).width +
+      (countdown as NSString).size(withAttributes: [.font: countdownFont]).width
+    item.length = max(hasCountdown ? 86 : 78, ceil(max(titleWidth, countdownWidth) + 2))
     item.button?.attributedTitle = attributed
+    item.button?.toolTip = hasCountdown ? "\(title)\n\(countdown)" : title
   }
 
   private func statusBarCountdownPrefix(for title: String) -> String {
@@ -521,23 +532,26 @@ struct MetricCard: View {
       .monospacedDigit()
       .lineLimit(1)
       .minimumScaleFactor(0.72)
-      .layoutPriority(1)
+      .layoutPriority(3)
       .fixedSize(horizontal: true, vertical: false)
   }
 
   private var metricValueRow: some View {
-    HStack(alignment: .lastTextBaseline, spacing: 8 * scale) {
+    HStack(alignment: .lastTextBaseline, spacing: 0) {
       percentView
-        .frame(minWidth: 52 * scale, alignment: .leading)
+        .frame(width: 66 * scale, alignment: .leading)
+
+      Spacer(minLength: 8 * scale)
 
       Text(reset)
         .font(.system(size: 15 * scale, weight: .semibold))
         .foregroundStyle(Color.white.opacity(0.52))
         .lineLimit(1)
         .minimumScaleFactor(0.64)
+        .layoutPriority(1)
         .fixedSize(horizontal: true, vertical: false)
-        .frame(maxWidth: .infinity, alignment: .trailing)
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -981,7 +995,7 @@ final class QuotaViewModel: ObservableObject {
       return
     }
     let resetDate = statusBarCountdownTarget == .fiveHour ? shortResetDate : weeklyResetDate
-    statusBarCountdownText = countdownText(until: resetDate)
+    statusBarCountdownText = countdownText(until: resetDate, target: statusBarCountdownTarget)
   }
 
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
@@ -1010,17 +1024,18 @@ final class QuotaViewModel: ObservableObject {
     )
   }
 
-  private func countdownText(until resetDate: Date?) -> String {
+  private func countdownText(until resetDate: Date?, target: CountdownTarget) -> String {
     guard let resetDate else { return "--" }
     let totalSeconds = max(0, Int(resetDate.timeIntervalSinceNow.rounded()))
     let days = totalSeconds / 86_400
+    let totalHours = totalSeconds / 3_600
     let hours = (totalSeconds % 86_400) / 3_600
     let minutes = (totalSeconds % 3_600) / 60
-    let seconds = totalSeconds % 60
-    if days > 0 {
-      return "\(days)d \(hours)h \(minutes)m \(seconds)s"
+
+    switch target {
+    case .fiveHour: return "\(totalHours)h \(minutes)m"
+    case .sevenDay: return "\(days)d \(hours)h"
     }
-    return "\(hours)h \(minutes)m \(seconds)s"
   }
 
   private func sendThresholdNotificationsIfNeeded() {
