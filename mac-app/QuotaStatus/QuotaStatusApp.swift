@@ -66,51 +66,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private func renderStatusTitle(_ title: String, countdown: String, on item: NSStatusItem) {
     let hasCountdown = !countdown.isEmpty
     let countdownPrefix = hasCountdown ? statusBarCountdownPrefix(for: title) : ""
-    let visibleCountdown = hasCountdown ? "\(countdownPrefix)\(countdown)" : ""
     let topLineFontSize: CGFloat = hasCountdown ? 8.8 : NSFont.systemFontSize
     let countdownFontSize: CGFloat = 7.8
     let titleFont = NSFont.monospacedSystemFont(ofSize: topLineFontSize, weight: .bold)
     let countdownFont = NSFont.monospacedSystemFont(ofSize: countdownFontSize, weight: .semibold)
 
-    let paragraphStyle = NSMutableParagraphStyle()
-    paragraphStyle.lineBreakMode = .byClipping
-    paragraphStyle.alignment = .left
-    paragraphStyle.lineSpacing = -4.0
-
-    let text = hasCountdown ? "\(title)\n\(visibleCountdown)" : title
-    let attributed = NSMutableAttributedString(
-      string: text,
-      attributes: [
-        .baselineOffset: hasCountdown ? -2.8 : 0,
-        .foregroundColor: NSColor.labelColor,
-        .paragraphStyle: paragraphStyle,
-      ]
+    let image = renderStatusBarImage(
+      title: title,
+      countdown: countdown,
+      countdownPrefix: countdownPrefix,
+      titleFont: titleFont,
+      countdownFont: countdownFont
     )
-    let titleLength = (title as NSString).length
-    attributed.addAttributes(
-      [.font: titleFont],
-      range: NSRange(location: 0, length: titleLength)
-    )
-
-    if hasCountdown {
-      let prefixLength = (countdownPrefix as NSString).length
-      let countdownLength = (countdown as NSString).length
-      attributed.addAttributes(
-        [.font: titleFont],
-        range: NSRange(location: titleLength + 1, length: prefixLength)
-      )
-      attributed.addAttributes(
-        [.font: countdownFont],
-        range: NSRange(location: titleLength + 1 + prefixLength, length: countdownLength)
-      )
-    }
-
-    let titleWidth = (title as NSString).size(withAttributes: [.font: titleFont]).width
-    let countdownWidth = (countdownPrefix as NSString).size(withAttributes: [.font: titleFont]).width +
-      (countdown as NSString).size(withAttributes: [.font: countdownFont]).width
-    item.length = max(hasCountdown ? 86 : 78, ceil(max(titleWidth, countdownWidth) + 2))
-    item.button?.attributedTitle = attributed
+    item.length = image.size.width
+    item.button?.title = ""
+    item.button?.attributedTitle = NSAttributedString(string: "")
+    item.button?.image = image
+    item.button?.imagePosition = .imageOnly
     item.button?.toolTip = hasCountdown ? "\(title)\n\(countdown)" : title
+    item.button?.setAccessibilityLabel(hasCountdown ? "\(title)\n\(countdown)" : title)
+  }
+
+  private func renderStatusBarImage(
+    title: String,
+    countdown: String,
+    countdownPrefix: String,
+    titleFont: NSFont,
+    countdownFont: NSFont
+  ) -> NSImage {
+    let hasCountdown = !countdown.isEmpty
+    let titleAttributes: [NSAttributedString.Key: Any] = [
+      .font: titleFont,
+      .foregroundColor: NSColor.white.withAlphaComponent(0.96),
+    ]
+    let countdownAttributes: [NSAttributedString.Key: Any] = [
+      .font: countdownFont,
+      .foregroundColor: NSColor.white.withAlphaComponent(0.92),
+    ]
+    let titleSize = (title as NSString).size(withAttributes: titleAttributes)
+    let countdownSize = (countdown as NSString).size(withAttributes: countdownAttributes)
+    let prefixWidth = (countdownPrefix as NSString).size(withAttributes: titleAttributes).width
+    let imageWidth = max(hasCountdown ? 86 : 78, ceil(max(titleSize.width, prefixWidth + countdownSize.width) + 4))
+    let imageSize = NSSize(width: imageWidth, height: NSStatusBar.system.thickness)
+
+    let image = NSImage(size: imageSize, flipped: true) { _ in
+      if hasCountdown {
+        let lineGap: CGFloat = -1.8
+        let totalHeight = titleSize.height + countdownSize.height + lineGap
+        let titleY = max(0, floor((imageSize.height - totalHeight) / 2))
+        let countdownY = titleY + titleSize.height + lineGap
+
+        (title as NSString).draw(at: CGPoint(x: 0, y: titleY), withAttributes: titleAttributes)
+        (countdown as NSString).draw(at: CGPoint(x: prefixWidth, y: countdownY), withAttributes: countdownAttributes)
+      } else {
+        let titleY = max(0, floor((imageSize.height - titleSize.height) / 2))
+        (title as NSString).draw(at: CGPoint(x: 0, y: titleY), withAttributes: titleAttributes)
+      }
+      return true
+    }
+    image.isTemplate = false
+    return image
   }
 
   private func statusBarCountdownPrefix(for title: String) -> String {
