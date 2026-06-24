@@ -12,6 +12,6 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "${INSTALL_DIR}/${APP_NAME}"
 ditto "${ROOT_DIR}/dist/${APP_NAME}" "${INSTALL_DIR}/${APP_NAME}"
 
-open "${INSTALL_DIR}/${APP_NAME}" --args --accountId="${1:-mac-codex}"
+open "${INSTALL_DIR}/${APP_NAME}" --args --title="${1:-${QUOTA_STATUS_TITLE:-Mac Codex}}"
 
 echo "已安装并打开：${INSTALL_DIR}/${APP_NAME}"

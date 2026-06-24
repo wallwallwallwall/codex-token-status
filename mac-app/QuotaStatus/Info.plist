@@ -7,7 +7,7 @@
   <key>CFBundleExecutable</key>
   <string>QuotaStatus</string>
   <key>CFBundleIdentifier</key>
-  <string>top.wals.quotastatus</string>
+  <string>app.quotastatus.desktop</string>
   <key>CFBundleIconFile</key>
   <string>QuotaStatus</string>
   <key>CFBundleInfoDictionaryVersion</key>

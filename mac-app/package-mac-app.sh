@@ -14,7 +14,7 @@ rm -f "$PKG_PATH"
 pkgbuild \
   --component "$APP_DIR" \
   --install-location "/Applications" \
-  --identifier "top.wals.quotastatus" \
+  --identifier "app.quotastatus.desktop" \
   --version "$VERSION" \
   "$PKG_PATH"
 

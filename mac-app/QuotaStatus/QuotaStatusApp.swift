@@ -939,7 +939,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var notifyAt20 = QuotaViewModel.storedBool(QuotaViewModel.notify20Key, defaultValue: true)
   @Published var notifyAt5 = QuotaViewModel.storedBool(QuotaViewModel.notify5Key, defaultValue: true)
 
-  private let accountId: String
+  private let displayTitle: String
   private let codexCommand: String
   private var timer: Timer?
   private var countdownTimer: Timer?
@@ -950,11 +950,11 @@ final class QuotaViewModel: ObservableObject {
   private var notifiedThresholds = Set<Int>()
 
   init() {
-    accountId = Self.argumentValue("accountId") ??
-      ProcessInfo.processInfo.environment["TOKEN_USAGE_ACCOUNT_ID"] ??
-      "mac-codex"
+    displayTitle = Self.argumentValue("title") ??
+      ProcessInfo.processInfo.environment["QUOTA_STATUS_TITLE"] ??
+      "Mac Codex"
     codexCommand = Self.argumentValue("codexCommand") ??
-      ProcessInfo.processInfo.environment["TOKEN_USAGE_CODEX_COMMAND"] ??
+      ProcessInfo.processInfo.environment["QUOTA_STATUS_CODEX_COMMAND"] ??
       Self.defaultCodexCommand()
 
     if statusBarShowsCountdown && statusBarShowsResetTime {
@@ -1005,7 +1005,7 @@ final class QuotaViewModel: ObservableObject {
     let weekly = displayWindow(snapshot.secondary, label: "Weekly", resetKind: .date)
     let percent = percentFrom(short: short, weekly: weekly)
 
-    title = titleFromAccount(accountId)
+    title = displayTitle
     planText = planDisplay(snapshot.planType)
     primaryPercent = percent
     stale = false
@@ -1389,16 +1389,6 @@ final class QuotaViewModel: ObservableObject {
     if isResetting { return "正在调用官方重置" }
     guard let count = credits?.availableCount else { return "官方暂未返回重置能力" }
     return count > 0 ? "点击使用官方重置次数" : "当前没有可用重置次数"
-  }
-
-  private func titleFromAccount(_ accountId: String) -> String {
-    accountId
-      .split { "-_.".contains($0) }
-      .map { part in
-        guard let first = part.first else { return "" }
-        return String(first).uppercased() + String(part.dropFirst())
-      }
-      .joined(separator: " ")
   }
 
   private func clamp(_ value: Double) -> Int {
