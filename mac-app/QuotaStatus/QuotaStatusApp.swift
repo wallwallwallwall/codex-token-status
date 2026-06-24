@@ -712,10 +712,17 @@ struct ThemeSettingsSheet: View {
         }
 
         settingsSection("状态栏") {
-          Toggle("显示倒计时", isOn: Binding(
-            get: { model.statusBarShowsCountdown },
-            set: { model.setStatusBarShowsCountdown($0) }
-          ))
+          HStack(spacing: 16) {
+            Toggle("显示倒计时", isOn: Binding(
+              get: { model.statusBarShowsCountdown },
+              set: { model.setStatusBarShowsCountdown($0) }
+            ))
+
+            Toggle("显示重置时间", isOn: Binding(
+              get: { model.statusBarShowsResetTime },
+              set: { model.setStatusBarShowsResetTime($0) }
+            ))
+          }
 
           Picker("倒计时来源", selection: Binding(
             get: { model.statusBarCountdownTarget },
@@ -867,6 +874,7 @@ final class QuotaViewModel: ObservableObject {
 
   private static let defaults = UserDefaults.standard
   private static let showsCountdownKey = "QuotaStatus.statusBar.showsCountdown"
+  private static let showsResetTimeKey = "QuotaStatus.statusBar.showsResetTime"
   private static let countdownTargetKey = "QuotaStatus.statusBar.countdownTarget"
   private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
   private static let notify50Key = "QuotaStatus.notifications.threshold50"
@@ -893,6 +901,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var statusBarTitle = "CodeX\u{00A0}--|--"
   @Published var statusBarCountdownText = ""
   @Published var statusBarShowsCountdown = QuotaViewModel.storedBool(QuotaViewModel.showsCountdownKey, defaultValue: false)
+  @Published var statusBarShowsResetTime = QuotaViewModel.storedBool(QuotaViewModel.showsResetTimeKey, defaultValue: false)
   @Published var statusBarCountdownTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.countdownTargetKey) ?? "") ?? .fiveHour
   @Published var notificationsEnabled = QuotaViewModel.storedBool(QuotaViewModel.notificationsEnabledKey, defaultValue: false)
   @Published var notifyAt50 = QuotaViewModel.storedBool(QuotaViewModel.notify50Key, defaultValue: true)
@@ -916,6 +925,11 @@ final class QuotaViewModel: ObservableObject {
     codexCommand = Self.argumentValue("codexCommand") ??
       ProcessInfo.processInfo.environment["TOKEN_USAGE_CODEX_COMMAND"] ??
       Self.defaultCodexCommand()
+
+    if statusBarShowsCountdown && statusBarShowsResetTime {
+      statusBarShowsResetTime = false
+      Self.defaults.set(false, forKey: Self.showsResetTimeKey)
+    }
 
     load()
     timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
@@ -1001,6 +1015,20 @@ final class QuotaViewModel: ObservableObject {
   func setStatusBarShowsCountdown(_ enabled: Bool) {
     statusBarShowsCountdown = enabled
     Self.defaults.set(enabled, forKey: Self.showsCountdownKey)
+    if enabled {
+      statusBarShowsResetTime = false
+      Self.defaults.set(false, forKey: Self.showsResetTimeKey)
+    }
+    refreshStatusBarDisplay()
+  }
+
+  func setStatusBarShowsResetTime(_ enabled: Bool) {
+    statusBarShowsResetTime = enabled
+    Self.defaults.set(enabled, forKey: Self.showsResetTimeKey)
+    if enabled {
+      statusBarShowsCountdown = false
+      Self.defaults.set(false, forKey: Self.showsCountdownKey)
+    }
     refreshStatusBarDisplay()
   }
 
@@ -1044,12 +1072,20 @@ final class QuotaViewModel: ObservableObject {
 
   private func refreshStatusBarDisplay() {
     statusBarTitle = "CodeX\u{00A0}\(shortPercentText)|\(weeklyPercentText)"
-    guard statusBarShowsCountdown else {
-      statusBarCountdownText = ""
+    if statusBarShowsCountdown {
+      let resetDate = statusBarCountdownTarget == .fiveHour ? shortResetDate : weeklyResetDate
+      statusBarCountdownText = countdownText(until: resetDate, target: statusBarCountdownTarget)
       return
     }
-    let resetDate = statusBarCountdownTarget == .fiveHour ? shortResetDate : weeklyResetDate
-    statusBarCountdownText = countdownText(until: resetDate, target: statusBarCountdownTarget)
+    if statusBarShowsResetTime {
+      statusBarCountdownText = statusBarResetTimeText()
+      return
+    }
+    statusBarCountdownText = ""
+  }
+
+  private func statusBarResetTimeText() -> String {
+    "\(shortResetText) | \(weeklyResetText)"
   }
 
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
