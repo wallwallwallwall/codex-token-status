@@ -4,6 +4,18 @@ import Foundation
 import SwiftUI
 import UserNotifications
 
+private func quotaStatusNotificationTestLog(_ message: String) {
+  FileHandle.standardError.write(Data("\(message)\n".utf8))
+}
+
+private func quotaStatusDeliverFallbackNotification(title: String, body: String) {
+  let notification = NSUserNotification()
+  notification.title = title
+  notification.informativeText = body
+  notification.soundName = NSUserNotificationDefaultSoundName
+  NSUserNotificationCenter.default.deliver(notification)
+}
+
 @main
 struct QuotaStatusApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -18,13 +30,15 @@ struct QuotaStatusApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDelegate {
   private var statusItem: NSStatusItem?
   private var cancellables = Set<AnyCancellable>()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.regular)
+    NSUserNotificationCenter.default.delegate = self
     configureStatusItem()
+    QuotaViewModel.shared.sendTestNotificationsIfRequested()
 
     DispatchQueue.main.async {
       guard let window = NSApp.windows.first else { return }
@@ -44,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       window.standardWindowButton(.miniaturizeButton)?.isHidden = true
       window.standardWindowButton(.zoomButton)?.isHidden = true
     }
+  }
+
+  nonisolated func userNotificationCenter(_ center: NSUserNotificationCenter, shouldPresent notification: NSUserNotification) -> Bool {
+    true
   }
 
   private func configureStatusItem() {
@@ -116,28 +134,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let codexSize = (parts.codex as NSString).size(withAttributes: codexAttributes)
     let spacerSize = (parts.spacer as NSString).size(withAttributes: codexAttributes)
     let metricsSize = (parts.metrics as NSString).size(withAttributes: metricsAttributes)
-    let topLineHeight = max(codexSize.height, metricsSize.height)
-    let topLineWidth = codexSize.width + spacerSize.width + metricsSize.width
     let countdownSize = (countdown as NSString).size(withAttributes: countdownAttributes)
-    let prefixWidth = (countdownPrefix as NSString).size(withAttributes: codexAttributes).width
-    let imageWidth = max(hasCountdown ? 92 : 78, ceil(max(topLineWidth, prefixWidth + countdownSize.width) + 4))
+    let rightColumnX = codexSize.width + spacerSize.width
+    let topLineWidth = rightColumnX + metricsSize.width
+    let imageWidth = max(hasCountdown ? 92 : 78, ceil(max(topLineWidth, rightColumnX + countdownSize.width) + 4))
     let imageSize = NSSize(width: imageWidth, height: NSStatusBar.system.thickness)
 
     let image = NSImage(size: imageSize, flipped: true) { _ in
       if hasCountdown {
-        let lineGap: CGFloat = -2.6
-        let totalHeight = topLineHeight + countdownSize.height + lineGap
-        let titleY = max(0, floor((imageSize.height - totalHeight) / 2))
-        let metricsY = titleY + max(0, floor((codexSize.height - metricsSize.height) * 0.55))
-        let countdownY = titleY + topLineHeight + lineGap
+        let lineGap: CGFloat = -1.0
+        let totalHeight = metricsSize.height + countdownSize.height + lineGap
+        let codexY = floor((imageSize.height - codexSize.height) / 2)
+        let metricsY = max(0, floor((imageSize.height - totalHeight) / 2))
+        let countdownY = min(imageSize.height - countdownSize.height, metricsY + metricsSize.height + lineGap)
 
-        (parts.codex as NSString).draw(at: CGPoint(x: 0, y: titleY), withAttributes: codexAttributes)
-        (parts.metrics as NSString).draw(at: CGPoint(x: codexSize.width + spacerSize.width, y: metricsY), withAttributes: metricsAttributes)
-        (countdown as NSString).draw(at: CGPoint(x: prefixWidth, y: countdownY), withAttributes: countdownAttributes)
+        (parts.codex as NSString).draw(at: CGPoint(x: 0, y: codexY), withAttributes: codexAttributes)
+        (parts.metrics as NSString).draw(at: CGPoint(x: rightColumnX, y: metricsY), withAttributes: metricsAttributes)
+        (countdown as NSString).draw(at: CGPoint(x: rightColumnX, y: countdownY), withAttributes: countdownAttributes)
       } else {
+        let topLineHeight = max(codexSize.height, metricsSize.height)
         let titleY = max(0, floor((imageSize.height - topLineHeight) / 2))
         (parts.codex as NSString).draw(at: CGPoint(x: 0, y: titleY), withAttributes: codexAttributes)
-        (parts.metrics as NSString).draw(at: CGPoint(x: codexSize.width + spacerSize.width, y: titleY), withAttributes: metricsAttributes)
+        (parts.metrics as NSString).draw(at: CGPoint(x: rightColumnX, y: titleY), withAttributes: metricsAttributes)
       }
       return true
     }
@@ -178,7 +196,7 @@ struct QuotaPanelView: View {
   @State private var showingThemeSheet = false
 
   var body: some View {
-    let palette = themeStore.palette(for: model.stale ? 0 : model.primaryPercent)
+    let palette = themeStore.palette(for: model.primaryPercent)
 
     GeometryReader { proxy in
       let base = min(proxy.size.width, proxy.size.height)
@@ -733,6 +751,16 @@ struct ThemeSettingsSheet: View {
           }
           .pickerStyle(.segmented)
           .disabled(!model.statusBarShowsCountdown)
+
+          Picker("重置时间来源", selection: Binding(
+            get: { model.statusBarResetTimeTarget },
+            set: { model.setStatusBarResetTimeTarget($0) }
+          )) {
+            Text("5小时重置").tag(CountdownTarget.fiveHour)
+            Text("7天重置").tag(CountdownTarget.sevenDay)
+          }
+          .pickerStyle(.segmented)
+          .disabled(!model.statusBarShowsResetTime)
         }
 
         settingsSection("通知提醒") {
@@ -876,6 +904,8 @@ final class QuotaViewModel: ObservableObject {
   private static let showsCountdownKey = "QuotaStatus.statusBar.showsCountdown"
   private static let showsResetTimeKey = "QuotaStatus.statusBar.showsResetTime"
   private static let countdownTargetKey = "QuotaStatus.statusBar.countdownTarget"
+  private static let resetTimeTargetKey = "QuotaStatus.statusBar.resetTimeTarget"
+  private static let displayCacheKey = "QuotaStatus.display.cache"
   private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
   private static let notify50Key = "QuotaStatus.notifications.threshold50"
   private static let notify20Key = "QuotaStatus.notifications.threshold20"
@@ -903,6 +933,7 @@ final class QuotaViewModel: ObservableObject {
   @Published var statusBarShowsCountdown = QuotaViewModel.storedBool(QuotaViewModel.showsCountdownKey, defaultValue: false)
   @Published var statusBarShowsResetTime = QuotaViewModel.storedBool(QuotaViewModel.showsResetTimeKey, defaultValue: false)
   @Published var statusBarCountdownTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.countdownTargetKey) ?? "") ?? .fiveHour
+  @Published var statusBarResetTimeTarget = CountdownTarget(rawValue: QuotaViewModel.defaults.string(forKey: QuotaViewModel.resetTimeTargetKey) ?? "") ?? .fiveHour
   @Published var notificationsEnabled = QuotaViewModel.storedBool(QuotaViewModel.notificationsEnabledKey, defaultValue: false)
   @Published var notifyAt50 = QuotaViewModel.storedBool(QuotaViewModel.notify50Key, defaultValue: true)
   @Published var notifyAt20 = QuotaViewModel.storedBool(QuotaViewModel.notify20Key, defaultValue: true)
@@ -931,6 +962,7 @@ final class QuotaViewModel: ObservableObject {
       Self.defaults.set(false, forKey: Self.showsResetTimeKey)
     }
 
+    restoreDisplayCache()
     load()
     timer = Timer.scheduledTimer(withTimeInterval: 5 * 60, repeats: true) { [weak self] _ in
       Task { await self?.fetchStatus() }
@@ -958,7 +990,13 @@ final class QuotaViewModel: ObservableObject {
       apply(snapshot)
     } catch {
       stale = true
-      signalText = error.userFacingMessage
+      if hasDisplayData {
+        signalText = "读取失败，保留上次数据"
+        resetButtonHelpText = sanitizeFetchMessage(error.userFacingMessage)
+        refreshStatusBarDisplay()
+      } else {
+        signalText = sanitizeFetchMessage(error.userFacingMessage)
+      }
     }
   }
 
@@ -989,6 +1027,7 @@ final class QuotaViewModel: ObservableObject {
     resetAvailableText = resetAvailability(snapshot.rateLimitResetCredits)
     canConsumeReset = (snapshot.rateLimitResetCredits?.availableCount ?? 0) > 0 && !isResetting
     resetButtonHelpText = resetHelpText(snapshot.rateLimitResetCredits)
+    saveDisplayCache()
   }
 
   func consumeResetCredit() async {
@@ -1006,7 +1045,7 @@ final class QuotaViewModel: ObservableObject {
     } catch {
       isResetting = false
       stale = true
-      signalText = error.userFacingMessage
+      signalText = sanitizeFetchMessage(error.userFacingMessage)
       canConsumeReset = true
       resetButtonHelpText = "官方重置失败，点击重试"
     }
@@ -1035,6 +1074,12 @@ final class QuotaViewModel: ObservableObject {
   func setStatusBarCountdownTarget(_ target: CountdownTarget) {
     statusBarCountdownTarget = target
     Self.defaults.set(target.rawValue, forKey: Self.countdownTargetKey)
+    refreshStatusBarDisplay()
+  }
+
+  func setStatusBarResetTimeTarget(_ target: CountdownTarget) {
+    statusBarResetTimeTarget = target
+    Self.defaults.set(target.rawValue, forKey: Self.resetTimeTargetKey)
     refreshStatusBarDisplay()
   }
 
@@ -1070,6 +1115,37 @@ final class QuotaViewModel: ObservableObject {
     sendThresholdNotificationsIfNeeded()
   }
 
+  func sendTestNotificationsIfRequested() {
+    guard ProcessInfo.processInfo.environment["QUOTA_STATUS_TEST_NOTIFICATIONS"] == "1" else {
+      return
+    }
+
+    let testIdentifiers = NotificationThreshold.allCases.map { "quota-status-5h-\($0.rawValue)-0" }
+    UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: testIdentifiers)
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: testIdentifiers)
+
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+      if let error {
+        quotaStatusNotificationTestLog("QuotaStatus notification test authorization error: \(error.localizedDescription)")
+      }
+      quotaStatusNotificationTestLog("QuotaStatus notification test authorization granted=\(granted)")
+
+      Task { @MainActor in
+        for threshold in NotificationThreshold.allCases {
+          self.sendNotification(for: threshold, currentPercent: threshold.rawValue)
+          quotaStatusNotificationTestLog("QuotaStatus notification test sent threshold=\(threshold.rawValue)")
+        }
+      }
+
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+          let deliveredCount = notifications.filter { testIdentifiers.contains($0.request.identifier) }.count
+          quotaStatusNotificationTestLog("QuotaStatus notification test delivered count=\(deliveredCount)")
+        }
+      }
+    }
+  }
+
   private func refreshStatusBarDisplay() {
     statusBarTitle = "CodeX\u{00A0}\(shortPercentText)|\(weeklyPercentText)"
     if statusBarShowsCountdown {
@@ -1085,7 +1161,77 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func statusBarResetTimeText() -> String {
-    "\(shortResetText) | \(weeklyResetText)"
+    statusBarResetTimeTarget == .fiveHour ? shortResetText : weeklyResetText
+  }
+
+  private var hasDisplayData: Bool {
+    shortPercentText != "--" || weeklyPercentText != "--"
+  }
+
+  private func restoreDisplayCache() {
+    guard let data = Self.defaults.data(forKey: Self.displayCacheKey),
+          let cache = try? JSONDecoder().decode(QuotaDisplayCache.self, from: data) else {
+      return
+    }
+
+    title = cache.title
+    signalText = cache.signalText
+    planText = cache.planText
+    primaryPercent = cache.primaryPercent
+    shortLabel = cache.shortLabel
+    shortPercentText = cache.shortPercentText
+    shortResetText = cache.shortResetText
+    weeklyLabel = cache.weeklyLabel
+    weeklyPercentText = cache.weeklyPercentText
+    weeklyResetText = cache.weeklyResetText
+    resetLabel = cache.resetLabel
+    resetCountText = cache.resetCountText
+    resetAvailableText = cache.resetAvailableText
+    resetButtonHelpText = cache.resetButtonHelpText
+    canConsumeReset = false
+    stale = false
+    refreshStatusBarDisplay()
+  }
+
+  private func saveDisplayCache() {
+    let cache = QuotaDisplayCache(
+      title: title,
+      signalText: signalText,
+      planText: planText,
+      primaryPercent: primaryPercent,
+      shortLabel: shortLabel,
+      shortPercentText: shortPercentText,
+      shortResetText: shortResetText,
+      weeklyLabel: weeklyLabel,
+      weeklyPercentText: weeklyPercentText,
+      weeklyResetText: weeklyResetText,
+      resetLabel: resetLabel,
+      resetCountText: resetCountText,
+      resetAvailableText: resetAvailableText,
+      resetButtonHelpText: resetButtonHelpText
+    )
+    if let data = try? JSONEncoder().encode(cache) {
+      Self.defaults.set(data, forKey: Self.displayCacheKey)
+    }
+  }
+
+  private func sanitizeFetchMessage(_ message: String) -> String {
+    let withoutEscape = message.replacingOccurrences(of: "\u{001B}", with: "")
+    let withoutAnsi = withoutEscape.replacingOccurrences(
+      of: #"\[[0-9;]*[A-Za-z]"#,
+      with: "",
+      options: .regularExpression
+    )
+    let firstLine = withoutAnsi
+      .split(whereSeparator: \.isNewline)
+      .first
+      .map(String.init) ?? "Codex 读取失败"
+    let trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return "Codex 读取失败" }
+    if trimmed.count > 34 {
+      return "\(trimmed.prefix(34))..."
+    }
+    return trimmed
   }
 
   private func percentFrom(short: QuotaWindow?, weekly: QuotaWindow?) -> Int {
@@ -1153,16 +1299,30 @@ final class QuotaViewModel: ObservableObject {
   }
 
   private func sendNotification(for threshold: NotificationThreshold, currentPercent: Int) {
+    let title = "CodeX 5小时额度提醒"
+    let body = "5小时剩余额度已到 \(threshold.rawValue)%，当前剩余 \(currentPercent)%"
     let content = UNMutableNotificationContent()
-    content.title = "CodeX 5小时额度提醒"
-    content.body = "5小时剩余额度已到 \(threshold.rawValue)%，当前剩余 \(currentPercent)%"
+    content.title = title
+    content.body = body
     content.sound = .default
     let request = UNNotificationRequest(
       identifier: "quota-status-5h-\(threshold.rawValue)-\(Int(shortResetDate?.timeIntervalSince1970 ?? 0))",
       content: content,
       trigger: nil
     )
-    UNUserNotificationCenter.current().add(request)
+    UNUserNotificationCenter.current().add(request) { error in
+      if let error {
+        quotaStatusNotificationTestLog("QuotaStatus notification add error: \(error.localizedDescription)")
+        DispatchQueue.main.async {
+          quotaStatusDeliverFallbackNotification(title: title, body: body)
+          if ProcessInfo.processInfo.environment["QUOTA_STATUS_TEST_NOTIFICATIONS"] == "1" {
+            quotaStatusNotificationTestLog("QuotaStatus notification legacy fallback sent threshold=\(threshold.rawValue)")
+          }
+        }
+      } else if ProcessInfo.processInfo.environment["QUOTA_STATUS_TEST_NOTIFICATIONS"] == "1" {
+        quotaStatusNotificationTestLog("QuotaStatus notification test added threshold=\(threshold.rawValue)")
+      }
+    }
   }
 
   private func percentText(_ window: QuotaWindow?) -> String {
@@ -1290,6 +1450,23 @@ struct QuotaWindow {
   let resetText: String?
   let resetAt: String?
   let resetDate: Date?
+}
+
+struct QuotaDisplayCache: Codable {
+  let title: String
+  let signalText: String
+  let planText: String
+  let primaryPercent: Int
+  let shortLabel: String
+  let shortPercentText: String
+  let shortResetText: String
+  let weeklyLabel: String
+  let weeklyPercentText: String
+  let weeklyResetText: String
+  let resetLabel: String
+  let resetCountText: String
+  let resetAvailableText: String
+  let resetButtonHelpText: String
 }
 
 struct CodexRateLimitEnvelope: Decodable {
