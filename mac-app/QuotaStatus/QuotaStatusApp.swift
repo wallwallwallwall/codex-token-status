@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import CryptoKit
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -753,6 +754,42 @@ struct ThemeSettingsSheet: View {
             .foregroundStyle(.secondary)
         }
 
+        settingsSection(model.t(.updatesSection)) {
+          Text(model.t(.autoUpdateDescription))
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+
+          Text("\(model.t(.currentVersion)): \(model.currentAppVersion)")
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+
+          HStack(spacing: 10) {
+            Button(model.t(.checkForUpdates)) {
+              model.checkForUpdates()
+            }
+            .disabled(model.isCheckingForUpdate || model.isInstallingUpdate)
+
+            if model.availableUpdate != nil {
+              Button(model.t(.downloadAndInstall)) {
+                model.downloadAndInstallUpdate()
+              }
+              .buttonStyle(.borderedProminent)
+              .disabled(model.isCheckingForUpdate || model.isInstallingUpdate)
+            }
+          }
+
+          if let update = model.availableUpdate {
+            Text("\(model.t(.updateAvailable)): \(update.version)")
+              .font(.system(size: 12, weight: .bold, design: .rounded))
+          }
+
+          if !model.updateStatusText.isEmpty {
+            Text(model.updateStatusText)
+              .font(.system(size: 12, weight: .semibold, design: .rounded))
+              .foregroundStyle(.secondary)
+          }
+        }
+
         settingsSection(model.t(.tokenRefreshSection)) {
           Text(model.t(.tokenRefreshDescription))
             .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -991,6 +1028,19 @@ enum LocalizedTextKey {
   case languageSection
   case languagePicker
   case languageDescription
+  case updatesSection
+  case autoUpdateDescription
+  case currentVersion
+  case checkForUpdates
+  case checkingForUpdates
+  case downloadAndInstall
+  case downloadingUpdate
+  case installingUpdate
+  case updateAvailable
+  case upToDate
+  case noUpdatePackage
+  case noUpdateAvailable
+  case updateFailed
   case tokenRefreshSection
   case tokenRefreshDescription
   case refreshInterval
@@ -1058,6 +1108,40 @@ enum LocalizedTextKey {
   case notificationTitle
 }
 
+struct AvailableUpdate {
+  let version: String
+  let packageName: String
+  let packageURL: URL
+  let releaseURL: URL
+  let digest: String?
+}
+
+struct GitHubRelease: Decodable {
+  let tagName: String
+  let htmlURL: URL
+  let body: String?
+  let assets: [GitHubReleaseAsset]
+
+  enum CodingKeys: String, CodingKey {
+    case tagName = "tag_name"
+    case htmlURL = "html_url"
+    case body
+    case assets
+  }
+}
+
+struct GitHubReleaseAsset: Decodable {
+  let name: String
+  let browserDownloadURL: URL
+  let digest: String?
+
+  enum CodingKeys: String, CodingKey {
+    case name
+    case browserDownloadURL = "browser_download_url"
+    case digest
+  }
+}
+
 @MainActor
 final class QuotaViewModel: ObservableObject {
   static let shared = QuotaViewModel()
@@ -1070,6 +1154,7 @@ final class QuotaViewModel: ObservableObject {
   private static let refreshIntervalModeKey = "QuotaStatus.refresh.intervalMode"
   private static let refreshIntervalCustomSecondsKey = "QuotaStatus.refresh.customSeconds"
   private static let languageKey = "QuotaStatus.language"
+  private nonisolated static let latestReleaseURL = URL(string: "https://api.github.com/repos/wallwallwallwall/codex-token-status/releases/latest")!
   private static let displayCacheKey = "QuotaStatus.display.cache"
   private static let notificationsEnabledKey = "QuotaStatus.notifications.enabled"
   private static let notify50Key = "QuotaStatus.notifications.threshold50"
@@ -1106,6 +1191,10 @@ final class QuotaViewModel: ObservableObject {
   @Published var notifyAt50 = QuotaViewModel.storedBool(QuotaViewModel.notify50Key, defaultValue: true)
   @Published var notifyAt20 = QuotaViewModel.storedBool(QuotaViewModel.notify20Key, defaultValue: true)
   @Published var notifyAt5 = QuotaViewModel.storedBool(QuotaViewModel.notify5Key, defaultValue: true)
+  @Published var updateStatusText = ""
+  @Published var availableUpdate: AvailableUpdate?
+  @Published var isCheckingForUpdate = false
+  @Published var isInstallingUpdate = false
 
   private let displayTitle: String
   private let codexCommand: String
@@ -1170,6 +1259,70 @@ final class QuotaViewModel: ObservableObject {
       return "Supports 10 seconds to 86400 seconds. Currently reads every \(refreshIntervalDisplayText)."
     case .chinese:
       return "支持 10 秒到 86400 秒。当前每 \(refreshIntervalDisplayText) 读取一次。"
+    }
+  }
+
+  var currentAppVersion: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+  }
+
+  func checkForUpdates() {
+    guard !isCheckingForUpdate, !isInstallingUpdate else { return }
+
+    isCheckingForUpdate = true
+    updateStatusText = t(.checkingForUpdates)
+    availableUpdate = nil
+
+    Task {
+      do {
+        let release = try await Self.fetchLatestRelease()
+        let latestVersion = Self.normalizedVersion(release.tagName)
+        guard Self.isVersion(latestVersion, newerThan: currentAppVersion) else {
+          updateStatusText = t(.upToDate)
+          isCheckingForUpdate = false
+          return
+        }
+        guard let package = release.assets.first(where: { $0.name.hasSuffix(".pkg") }) else {
+          updateStatusText = t(.noUpdatePackage)
+          isCheckingForUpdate = false
+          return
+        }
+
+        availableUpdate = AvailableUpdate(
+          version: latestVersion,
+          packageName: package.name,
+          packageURL: package.browserDownloadURL,
+          releaseURL: release.htmlURL,
+          digest: package.digest
+        )
+        updateStatusText = "\(t(.updateAvailable)): \(latestVersion)"
+        isCheckingForUpdate = false
+      } catch {
+        updateStatusText = "\(t(.updateFailed)): \(error.localizedDescription)"
+        isCheckingForUpdate = false
+      }
+    }
+  }
+
+  func downloadAndInstallUpdate() {
+    guard let update = availableUpdate, !isCheckingForUpdate, !isInstallingUpdate else {
+      updateStatusText = t(.noUpdateAvailable)
+      return
+    }
+
+    isInstallingUpdate = true
+    updateStatusText = t(.downloadingUpdate)
+
+    Task {
+      do {
+        let packageURL = try await Self.downloadPackage(update)
+        try Self.verifyPackageDigestIfNeeded(update.digest, packageURL: packageURL)
+        updateStatusText = t(.installingUpdate)
+        try await Self.runPrivilegedInstaller(packageURL: packageURL)
+      } catch {
+        isInstallingUpdate = false
+        updateStatusText = "\(t(.updateFailed)): \(error.localizedDescription)"
+      }
     }
   }
 
@@ -1728,6 +1881,115 @@ final class QuotaViewModel: ObservableObject {
     return clampRefreshIntervalSeconds(defaults.integer(forKey: refreshIntervalCustomSecondsKey))
   }
 
+  private nonisolated static func fetchLatestRelease() async throws -> GitHubRelease {
+    var request = URLRequest(url: latestReleaseURL)
+    request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+    request.setValue("QuotaStatus", forHTTPHeaderField: "User-Agent")
+    let (data, response) = try await URLSession.shared.data(for: request)
+    if let httpResponse = response as? HTTPURLResponse,
+       !(200..<300).contains(httpResponse.statusCode) {
+      throw UpdateError.httpStatus(httpResponse.statusCode)
+    }
+    return try JSONDecoder().decode(GitHubRelease.self, from: data)
+  }
+
+  private nonisolated static func downloadPackage(_ update: AvailableUpdate) async throws -> URL {
+    let (temporaryURL, response) = try await URLSession.shared.download(from: update.packageURL)
+    if let httpResponse = response as? HTTPURLResponse,
+       !(200..<300).contains(httpResponse.statusCode) {
+      throw UpdateError.httpStatus(httpResponse.statusCode)
+    }
+
+    let cacheDirectory = try updateCacheDirectory()
+    let destination = cacheDirectory.appendingPathComponent(update.packageName)
+    if FileManager.default.fileExists(atPath: destination.path) {
+      try FileManager.default.removeItem(at: destination)
+    }
+    try FileManager.default.moveItem(at: temporaryURL, to: destination)
+    return destination
+  }
+
+  private nonisolated static func verifyPackageDigestIfNeeded(_ digest: String?, packageURL: URL) throws {
+    guard let digest,
+          digest.lowercased().hasPrefix("sha256:") else {
+      return
+    }
+    let expected = String(digest.dropFirst("sha256:".count)).lowercased()
+    let data = try Data(contentsOf: packageURL)
+    let actual = SHA256.hash(data: data)
+      .map { String(format: "%02x", $0) }
+      .joined()
+    guard actual == expected else {
+      throw UpdateError.digestMismatch
+    }
+  }
+
+  private nonisolated static func runPrivilegedInstaller(packageURL: URL) async throws {
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      DispatchQueue.global(qos: .utility).async {
+        do {
+          let packagePath = shellQuoted(packageURL.path)
+          let shellCommand = "/usr/bin/xattr -d com.apple.quarantine \(packagePath) >/dev/null 2>&1 || true; /usr/sbin/installer -pkg \(packagePath) -target /"
+          let script = "do shell script \(appleScriptString(shellCommand)) with administrator privileges"
+          let process = Process()
+          process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+          process.arguments = ["-e", script]
+          try process.run()
+          process.waitUntilExit()
+          guard process.terminationStatus == 0 else {
+            continuation.resume(throwing: UpdateError.installerFailed(Int(process.terminationStatus)))
+            return
+          }
+          continuation.resume()
+        } catch {
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+  }
+
+  private nonisolated static func updateCacheDirectory() throws -> URL {
+    let baseURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first ??
+      FileManager.default.temporaryDirectory
+    let directory = baseURL.appendingPathComponent("QuotaStatusUpdates", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+  }
+
+  private nonisolated static func normalizedVersion(_ tagName: String) -> String {
+    tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+  }
+
+  private nonisolated static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+    let candidateParts = versionParts(candidate)
+    let currentParts = versionParts(current)
+    let maxCount = max(candidateParts.count, currentParts.count)
+    for index in 0..<maxCount {
+      let candidateValue = index < candidateParts.count ? candidateParts[index] : 0
+      let currentValue = index < currentParts.count ? currentParts[index] : 0
+      if candidateValue > currentValue { return true }
+      if candidateValue < currentValue { return false }
+    }
+    return false
+  }
+
+  private nonisolated static func versionParts(_ version: String) -> [Int] {
+    version
+      .split(separator: ".")
+      .map { part in
+        let digits = part.prefix { $0.isNumber }
+        return Int(digits) ?? 0
+      }
+  }
+
+  private nonisolated static func shellQuoted(_ value: String) -> String {
+    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+  }
+
+  private nonisolated static func appleScriptString(_ value: String) -> String {
+    "\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
+  }
+
   private static func matchesAnyLocalized(_ value: String, keys: [LocalizedTextKey]) -> Bool {
     keys.contains { key in
       value == localized(key, language: .english) || value == localized(key, language: .chinese)
@@ -1784,6 +2046,19 @@ final class QuotaViewModel: ObservableObject {
       case .languageSection: return "Language"
       case .languagePicker: return "Language"
       case .languageDescription: return "Default is English. Switching language only changes local display text."
+      case .updatesSection: return "Online Updates"
+      case .autoUpdateDescription: return "Checks GitHub Releases, downloads the latest installer package, and replaces this app after admin authorization."
+      case .currentVersion: return "Current version"
+      case .checkForUpdates: return "Check for Updates"
+      case .checkingForUpdates: return "Checking for updates..."
+      case .downloadAndInstall: return "Download and Install"
+      case .downloadingUpdate: return "Downloading update..."
+      case .installingUpdate: return "Launching installer. macOS may ask for your password."
+      case .updateAvailable: return "Update available"
+      case .upToDate: return "Already up to date"
+      case .noUpdatePackage: return "No installer package found in the latest release"
+      case .noUpdateAvailable: return "No update selected"
+      case .updateFailed: return "Update failed"
       case .tokenRefreshSection: return "Token Data Refresh"
       case .tokenRefreshDescription: return "Default 30 seconds, reading token data from local Codex."
       case .refreshInterval: return "Refresh interval"
@@ -1858,6 +2133,19 @@ final class QuotaViewModel: ObservableObject {
       case .languageSection: return "语言"
       case .languagePicker: return "语言"
       case .languageDescription: return "默认使用英语。切换语言只影响本地显示文案。"
+      case .updatesSection: return "在线更新"
+      case .autoUpdateDescription: return "检查 GitHub Releases，下载最新安装包，并在管理员授权后自动替换当前 App。"
+      case .currentVersion: return "当前版本"
+      case .checkForUpdates: return "检查更新"
+      case .checkingForUpdates: return "正在检查更新..."
+      case .downloadAndInstall: return "下载并安装"
+      case .downloadingUpdate: return "正在下载更新..."
+      case .installingUpdate: return "正在启动安装器，macOS 可能会要求输入密码。"
+      case .updateAvailable: return "发现新版本"
+      case .upToDate: return "已经是最新版本"
+      case .noUpdatePackage: return "最新 Release 里没有找到安装包"
+      case .noUpdateAvailable: return "没有可安装的更新"
+      case .updateFailed: return "更新失败"
       case .tokenRefreshSection: return "Token 数据刷新"
       case .tokenRefreshDescription: return "默认 30 秒，从本机 Codex 读取 token 数据。"
       case .refreshInterval: return "刷新间隔"
@@ -2457,6 +2745,23 @@ enum FetchError: LocalizedError {
       return message.isEmpty ? "Codex 读取失败" : message
     case .timeout:
       return "Codex 读取超时"
+    }
+  }
+}
+
+enum UpdateError: LocalizedError {
+  case httpStatus(Int)
+  case digestMismatch
+  case installerFailed(Int)
+
+  var errorDescription: String? {
+    switch self {
+    case .httpStatus(let status):
+      return "HTTP \(status)"
+    case .digestMismatch:
+      return "Downloaded package checksum mismatch"
+    case .installerFailed(let status):
+      return "Installer exited with status \(status)"
     }
   }
 }

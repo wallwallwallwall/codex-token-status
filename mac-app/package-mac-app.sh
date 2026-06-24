@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="QuotaStatus"
-VERSION="1.0.3"
+VERSION="1.0.4"
 APP_DIR="${ROOT_DIR}/dist/${APP_NAME}.app"
 PKG_PATH="${ROOT_DIR}/dist/${APP_NAME}-${VERSION}.pkg"
 PKG_BUILD_DIR="${ROOT_DIR}/dist/pkgbuild"
@@ -53,6 +53,9 @@ if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
   if [ -d "$OLD_APP" ] && [ "$OLD_APP" != "/Applications/QuotaStatus.app" ]; then
     /bin/rm -rf "$OLD_APP"
   fi
+  /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open -a /Applications/QuotaStatus.app >/dev/null 2>&1 || /usr/bin/open -a /Applications/QuotaStatus.app >/dev/null 2>&1 || true
+else
+  /usr/bin/open -a /Applications/QuotaStatus.app >/dev/null 2>&1 || true
 fi
 exit 0
 EOF
