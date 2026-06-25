@@ -1110,8 +1110,8 @@ enum LocalizedTextKey {
 
 struct AvailableUpdate {
   let version: String
-  let packageName: String
-  let packageURL: URL
+  let assetName: String
+  let assetURL: URL
   let releaseURL: URL
   let digest: String?
 }
@@ -1282,7 +1282,8 @@ final class QuotaViewModel: ObservableObject {
           isCheckingForUpdate = false
           return
         }
-        guard let package = release.assets.first(where: { $0.name.hasSuffix(".pkg") }) else {
+        guard let archive = release.assets.first(where: { $0.name == "QuotaStatus-mac.zip" }) ??
+          release.assets.first(where: { $0.name.hasSuffix(".zip") }) else {
           updateStatusText = t(.noUpdatePackage)
           isCheckingForUpdate = false
           return
@@ -1290,10 +1291,10 @@ final class QuotaViewModel: ObservableObject {
 
         availableUpdate = AvailableUpdate(
           version: latestVersion,
-          packageName: package.name,
-          packageURL: package.browserDownloadURL,
+          assetName: archive.name,
+          assetURL: archive.browserDownloadURL,
           releaseURL: release.htmlURL,
-          digest: package.digest
+          digest: archive.digest
         )
         updateStatusText = "\(t(.updateAvailable)): \(latestVersion)"
         isCheckingForUpdate = false
@@ -1315,10 +1316,10 @@ final class QuotaViewModel: ObservableObject {
 
     Task {
       do {
-        let packageURL = try await Self.downloadPackage(update)
-        try Self.verifyPackageDigestIfNeeded(update.digest, packageURL: packageURL)
+        let archiveURL = try await Self.downloadUpdateArchive(update)
+        try Self.verifyArchiveDigestIfNeeded(update.digest, archiveURL: archiveURL)
         updateStatusText = t(.installingUpdate)
-        try await Self.runPrivilegedInstaller(packageURL: packageURL)
+        try await Self.replaceInstalledApp(archiveURL: archiveURL)
       } catch {
         isInstallingUpdate = false
         updateStatusText = "\(t(.updateFailed)): \(error.localizedDescription)"
@@ -1893,15 +1894,15 @@ final class QuotaViewModel: ObservableObject {
     return try JSONDecoder().decode(GitHubRelease.self, from: data)
   }
 
-  private nonisolated static func downloadPackage(_ update: AvailableUpdate) async throws -> URL {
-    let (temporaryURL, response) = try await URLSession.shared.download(from: update.packageURL)
+  private nonisolated static func downloadUpdateArchive(_ update: AvailableUpdate) async throws -> URL {
+    let (temporaryURL, response) = try await URLSession.shared.download(from: update.assetURL)
     if let httpResponse = response as? HTTPURLResponse,
        !(200..<300).contains(httpResponse.statusCode) {
       throw UpdateError.httpStatus(httpResponse.statusCode)
     }
 
     let cacheDirectory = try updateCacheDirectory()
-    let destination = cacheDirectory.appendingPathComponent(update.packageName)
+    let destination = cacheDirectory.appendingPathComponent(update.assetName)
     if FileManager.default.fileExists(atPath: destination.path) {
       try FileManager.default.removeItem(at: destination)
     }
@@ -1909,13 +1910,13 @@ final class QuotaViewModel: ObservableObject {
     return destination
   }
 
-  private nonisolated static func verifyPackageDigestIfNeeded(_ digest: String?, packageURL: URL) throws {
+  private nonisolated static func verifyArchiveDigestIfNeeded(_ digest: String?, archiveURL: URL) throws {
     guard let digest,
           digest.lowercased().hasPrefix("sha256:") else {
       return
     }
     let expected = String(digest.dropFirst("sha256:".count)).lowercased()
-    let data = try Data(contentsOf: packageURL)
+    let data = try Data(contentsOf: archiveURL)
     let actual = SHA256.hash(data: data)
       .map { String(format: "%02x", $0) }
       .joined()
@@ -1924,12 +1925,17 @@ final class QuotaViewModel: ObservableObject {
     }
   }
 
-  private nonisolated static func runPrivilegedInstaller(packageURL: URL) async throws {
+  private nonisolated static func replaceInstalledApp(archiveURL: URL) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       DispatchQueue.global(qos: .utility).async {
         do {
-          let packagePath = shellQuoted(packageURL.path)
-          let shellCommand = "/usr/bin/xattr -d com.apple.quarantine \(packagePath) >/dev/null 2>&1 || true; /usr/sbin/installer -pkg \(packagePath) -target /"
+          let archivePath = shellQuoted(archiveURL.path)
+          let workDirectoryPath = shellQuoted(FileManager.default.temporaryDirectory
+            .appendingPathComponent("QuotaStatusUpdate-\(UUID().uuidString)", isDirectory: true)
+            .path)
+          let shellCommand = """
+          set -e; WORK_DIR=\(workDirectoryPath); /bin/rm -rf "$WORK_DIR"; /bin/mkdir -p "$WORK_DIR"; /usr/bin/ditto -x -k \(archivePath) "$WORK_DIR"; /usr/bin/test -d "$WORK_DIR/QuotaStatus.app"; /usr/bin/xattr -dr com.apple.quarantine "$WORK_DIR/QuotaStatus.app" >/dev/null 2>&1 || true; /usr/bin/pkill -x QuotaStatus >/dev/null 2>&1 || true; /bin/rm -rf /Applications/QuotaStatus.app; /usr/bin/ditto "$WORK_DIR/QuotaStatus.app" /Applications/QuotaStatus.app; /bin/rm -rf "$WORK_DIR"; /usr/bin/open -a /Applications/QuotaStatus.app
+          """
           let script = "do shell script \(appleScriptString(shellCommand)) with administrator privileges"
           let process = Process()
           process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -2047,7 +2053,7 @@ final class QuotaViewModel: ObservableObject {
       case .languagePicker: return "Language"
       case .languageDescription: return "Default is English. Switching language only changes local display text."
       case .updatesSection: return "Online Updates"
-      case .autoUpdateDescription: return "Checks GitHub Releases, downloads the latest installer package, and replaces this app after admin authorization."
+      case .autoUpdateDescription: return "Checks GitHub Releases, downloads the latest app archive, and replaces this app after admin authorization."
       case .currentVersion: return "Current version"
       case .checkForUpdates: return "Check for Updates"
       case .checkingForUpdates: return "Checking for updates..."
@@ -2056,7 +2062,7 @@ final class QuotaViewModel: ObservableObject {
       case .installingUpdate: return "Launching installer. macOS may ask for your password."
       case .updateAvailable: return "Update available"
       case .upToDate: return "Already up to date"
-      case .noUpdatePackage: return "No installer package found in the latest release"
+      case .noUpdatePackage: return "No app archive found in the latest release"
       case .noUpdateAvailable: return "No update selected"
       case .updateFailed: return "Update failed"
       case .tokenRefreshSection: return "Token Data Refresh"
@@ -2134,7 +2140,7 @@ final class QuotaViewModel: ObservableObject {
       case .languagePicker: return "语言"
       case .languageDescription: return "默认使用英语。切换语言只影响本地显示文案。"
       case .updatesSection: return "在线更新"
-      case .autoUpdateDescription: return "检查 GitHub Releases，下载最新安装包，并在管理员授权后自动替换当前 App。"
+      case .autoUpdateDescription: return "检查 GitHub Releases，下载最新 App 压缩包，并在管理员授权后自动替换当前 App。"
       case .currentVersion: return "当前版本"
       case .checkForUpdates: return "检查更新"
       case .checkingForUpdates: return "正在检查更新..."
@@ -2143,7 +2149,7 @@ final class QuotaViewModel: ObservableObject {
       case .installingUpdate: return "正在启动安装器，macOS 可能会要求输入密码。"
       case .updateAvailable: return "发现新版本"
       case .upToDate: return "已经是最新版本"
-      case .noUpdatePackage: return "最新 Release 里没有找到安装包"
+      case .noUpdatePackage: return "最新 Release 里没有找到 App 压缩包"
       case .noUpdateAvailable: return "没有可安装的更新"
       case .updateFailed: return "更新失败"
       case .tokenRefreshSection: return "Token 数据刷新"
@@ -2759,7 +2765,7 @@ enum UpdateError: LocalizedError {
     case .httpStatus(let status):
       return "HTTP \(status)"
     case .digestMismatch:
-      return "Downloaded package checksum mismatch"
+      return "Downloaded archive checksum mismatch"
     case .installerFailed(let status):
       return "Installer exited with status \(status)"
     }

@@ -22,7 +22,7 @@ This app was built for that gap. It keeps a lightweight local quota display outs
 - Shows reset time or countdown in the macOS menu bar.
 - Lets you choose how often token data is refreshed from local Codex: 30 seconds by default, 1 minute, 5 minutes, or a custom interval.
 - Supports English and Chinese display language, with English as the default.
-- Checks GitHub Releases for updates and can download and install the latest `.pkg` from inside the app.
+- Checks GitHub Releases for updates and can download and install the latest app archive from inside the app.
 - Shows available reset-credit count and whether reset is currently available.
 - Sends optional macOS notifications when the 5-hour window reaches 50%, 20%, or 5%.
 - Provides a compact native SwiftUI panel with selectable color themes.
@@ -78,7 +78,7 @@ Quota Status is local-first:
 Download either artifact from the GitHub release:
 
 - `QuotaStatus-mac.zip`: unzip and open `QuotaStatus.app`.
-- `QuotaStatus-1.0.4.pkg`: installer package that places the app in `/Applications`.
+- `QuotaStatus-1.0.5.pkg`: installer package that places the app in `/Applications`.
 
 The app is ad-hoc signed and not notarized. On first launch, macOS may block it. If that happens, use right-click `Open`, or allow it from `System Settings -> Privacy & Security`.
 
@@ -149,9 +149,9 @@ Display language is configurable in the app settings:
 
 ## Online Updates
 
-The app can check GitHub Releases from Settings. When a newer release is available, it downloads the latest `.pkg`, verifies the GitHub-provided SHA-256 digest when present, and launches the macOS installer with administrator authorization.
+The app can check GitHub Releases from Settings. When a newer release is available, it downloads `QuotaStatus-mac.zip`, verifies the GitHub-provided SHA-256 digest when present, and replaces the installed app with administrator authorization.
 
-The installer replaces `/Applications/QuotaStatus.app` and reopens the app after installation.
+The updater replaces `/Applications/QuotaStatus.app` and reopens the app after installation. The separate `.pkg` file is still provided for manual installation.
 
 ## Menu Bar Display
 
