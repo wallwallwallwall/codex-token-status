@@ -6,6 +6,8 @@ It shows the remaining percentage for the 5-hour window and the 7-day window, re
 
 Search keywords: Codex token status, Codex quota, Codex usage, macOS menu bar, token reset time.
 
+<img src="docs/screenshots/status-bar.png" alt="Menu bar display" width="180">
+
 ![Main panel](docs/screenshots/main-panel.png)
 
 ![Settings](docs/screenshots/settings.png)
@@ -156,6 +158,8 @@ The updater replaces `/Applications/QuotaStatus.app` and reopens the app after i
 ## Menu Bar Display
 
 The menu bar shows a compact line like:
+
+<img src="docs/screenshots/status-bar.png" alt="Menu bar display" width="180">
 
 ```text
 CodeX 92%|87%
